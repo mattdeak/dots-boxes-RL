@@ -10,18 +10,26 @@ import numpy as np
 class DotsAndBoxes():
     """The main environment for a dots and boxes game"""
     
+    DOWN = 0
+    RIGHT = 1
+    
     def __init__(self,size=2):
         """Initializer"""
         self.size = size
-        self.state = np.zeros([size,size,2])
+        #State is dot-to-dot cells with 4 channels (up,down,left,right)
+        self.state = np.zeros([size,size,4])
         self._player1 = None
         self._player2 = None
-        self.player_turn = 2        
+        self.player_turn = 2   
+        self.score = [0,0]
         self.action_list = []
         self.turn = 1 #Which player's turn is it
         self.manual = 0 #No manual player
         self.rewards = {'win':1,'loss':-1,'draw':0}
-        self._initialize_action_list()
+        self.N = 0
+        self.S = 1
+        self.E = 2
+        self.W = 3
     
     @property    
     def player1(self):
@@ -45,17 +53,7 @@ class DotsAndBoxes():
         agent.environment = self
         self._player2 = agent
         
-    def _initialize_action_list(self):
-        """initialize valid actions"""
-        for i in range(self.size):
-            for j in range(self.size):
-                if i != self.size - 1:
-                    self.action_list.append([i,j,0])
-                
-                if j != self.size - 1:
-                    self.action_list.append([i,j,1])
-    
-    def switch_turns(self):
+    def switch_turn(self):
         """Switches the turn"""
         if self.turn == 1:
             return 2
@@ -66,6 +64,11 @@ class DotsAndBoxes():
         """Takes an action and returns the next game state."""
         reward = 0
         
+        #If the player is trying to act on the terminal state
+        #It means they have lost
+        if self.state is None:
+            return self.rewards['loss']
+        
         #If an action is invalid and the environment is set to quit
         #on an invalid action, set the reward to loss and return
         #the terminal state. Otherwise, simply return the state without
@@ -75,17 +78,62 @@ class DotsAndBoxes():
                 reward = self.rewards['loss']
                 self.state = None
             return self.state,reward
+        
+        #Add a wall where the action dictates
+        self.state[action] = 1
+        if self.made_box(action):
+            self.score[self.player_turn - 1] += 1
+        else:
+            self.switch_turn()
+        
     
-    
-   
+    def made_box(self,action):
+        """Determine whether the action made a box"""
+        
     def play(self):
         """Plays a game"""
         pass
     
+    def convert_to_wall(self,state):
+        """Converts a specific game state array to the wall it represents"""
+        row,column,side = state
+        if side == self.N:
+            return row * self.size + column
+        elif side == self.S:
+            return (row + 1) * self.size + column
+        elif side == self.E:
+            return (self.size * (self.size + 1)) + row * self.size + column
+        elif side == self.W:
+            return (self.size * (self.size + 1)) + row * self.size + (column + 1)
+            
+    
+    def convert_to_state(self,wall_number):
+        """Converts a wall number to the specific game states that it represents"""
+        #If this is true, the wall is on the N-S
+        cells = []
+        if wall_number < ((self.size) * (self.size + 1)):
+            cell_column = wall_number % self.size
+            cell_row = wall_number // self.size
+            if cell_row != 0:
+                cells.append([cell_row - 1, cell_column, self.S])
+            if cell_row != self.size:
+                cells.append([cell_row, cell_column, self.N])
+        #Otherwise the wall is E-W        
+        else:
+            cell_row = (wall_number-(self.size * (self.size + 1)))//(self.size + 1)
+            cell_column = wall_number % (self.size + 1)
+            if cell_column != 0:
+                cells.append([cell_row, cell_column - 1, self.E])
+                
+            if cell_column != self.size:
+                cells.append([cell_row, cell_column, self.W])
+                
+        return cells
+                
+     
     
     def is_valid_action(self,action):
-        if self.state[action[0],action[1],action[2]] == 0:
-            return True
+        
         return False
         
     def print_state(self):
@@ -108,6 +156,8 @@ class DotsAndBoxes():
             for c in column_bars:
                 print(c,end="")
             print()
+            
+            
                 
 if __name__ == '__main__':
     db = DotsAndBoxes(3)
