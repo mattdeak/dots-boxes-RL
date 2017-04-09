@@ -6,7 +6,7 @@ Created on Sat Apr  8 21:52:43 2017
 """
 
 import numpy as np
-from enum import Enum
+from collections import defaultdict
 
 class DotsAndBoxes():
     """The main environment for a dots and boxes game"""
@@ -21,13 +21,12 @@ class DotsAndBoxes():
         self.state = np.zeros([size,size,4])
         self._player1 = None
         self._player2 = None
-        self.current_player = 1
-        self.score = {'player1':0,'player2':0}
-        self.action_list = range(size * (size + 1))
-        self.turn = 1 #Which player's turn is it
+        self.current_player = self._player1
+        self.score = defaultdict(int)
+        self.action_list = range(size * (size + 1) * 2)
+        self.valid_actions = None
         self.manual = 0 #No manual player
         self.reward_dictionary = {'win':1,'loss':-1,'draw':0}
-        self.rewards = {1:0,2:0}
         self.SIDES = {'N':0,'S':1,'E':2,'W':3}
         
     @property    
@@ -44,30 +43,49 @@ class DotsAndBoxes():
     def player1(self,agent):
         """Sets the player and adds current game instance as the agent environment"""
         agent.environment = self
-        self._player = agent    
+        self._player1 = agent
+        self._player1.name = "Player 1"
+        self.current_player = self._player1
       
     @player2.setter
     def player2(self,agent):
         """Sets the player and adds current game instance as the agent environment"""
         agent.environment = self
         self._player2 = agent
+        self._player2.name = "Player 2"
         
     def switch_turn(self):
         """Switches the turn"""
-        if self.current_player == 1:
-            self.current_player = 2
+        if self.current_player == self._player1:
+            self.current_player = self._player2
         else:
-            self.current_player = 1
-          
+            self.current_player = self._player1
+            
+    def payout(self):
+        """Updates the player rewards"""
+        if self.score[self._player1] < self.score[self._player2]:
+            self._player1.receive_reward(self.reward_dictionary['loss'])
+            self._player2.receive_reward(self.reward_dictionary['win'])
+        elif self.score[self._player1] == self.score[self._player2]:
+            self._player1.receive_reward(self.reward_dictionary['draw'])
+            self._player2.receive_reward(self.reward_dictionary['draw'])
+        else:
+            self._player1.receive_reward(self.reward_dictionary['win'])
+            self._player2.receive_reward(self.reward_dictionary['loss'])
+            
+
+            
+    
+    def end_game(self):
+        """Ends the Game"""
+        self.payout()
+        self.state = None
+    
     
     def step(self,action):
         """Takes an action and changes the game state."""
-        reward = 0
         
-        #If the player is trying to act on the terminal state
-        #It means they have lost
-        if self.state is None:
-            return self.rewards['loss']
+        
         
         #If an action is invalid and the environment is set to quit
         #on an invalid action, set the reward to loss and return
@@ -75,20 +93,20 @@ class DotsAndBoxes():
         #switching turns, to give the player another chance.
         if not self.is_valid_action:
             if self.manual != self.player_turn:
-                reward = self.rewards['loss']
-                self.state = None
-            return self.state,reward
+                self.endGame('loss')
         
         #Add a wall where the action dictates
         self.build_wall(action)
         
         #Determine the score of the action
         score = self.action_score(action)
-        
-        if self.action_score(action) > 0:
-            self.score[self.current_player - 1] += score
+        self.score[self.current_player] += score
+        self.valid_actions.remove(action)            
+        if self.valid_actions == []:
+            self.end_game()
         else:
-            self.switch_turn()
+            if score == 0:
+                self.switch_turn()
         
     
     def action_score(self,action):
@@ -104,8 +122,39 @@ class DotsAndBoxes():
         return score
         
         
-    def play(self):
+    def play(self,log=False):
         """Plays a game"""
+        self._initialize_game()
+        game_log = []
+        
+        while self.state is not None:
+            
+            if log:
+                game_log.append("\nState:\n{}\n".format(self))
+                action = self.current_player.act()
+                game_log.append("{} built wall {}".format(self.current_player,action))
+                game_log.append("Current Player 1 Score: {}".format(self.score[self._player1]))
+                game_log.append("Current Player 2 Score: {}".format(self.score[self._player2]))
+            else:
+                self.current_player.act()
+                
+        if game_log:
+            finish = ""
+            if self.score[self._player1] > self.score[self._player2]:
+                finish = "Player 1 Wins!"
+            elif self.score[self._player1] == self.score[self._player2]:
+                finish = "Draw!"
+            else:
+                finish = "Player 2 Wins!"
+            game_log.append(finish)
+                
+        return game_log
+        
+        
+    def _initialize_game(self):
+        self.valid_actions = [i for i in range(self.size * (self.size + 1) * 2)]
+        self.score = defaultdict(int)
+        self.state = np.zeros([self.size,self.size,4])
         
     
     def reward_payout(self):
@@ -115,7 +164,8 @@ class DotsAndBoxes():
         """Builds a wall in the game state"""
         states = self.convert_to_state(action)
         for state_index in states:
-            self.state[state_index] = 1
+            row,column,side = state_index
+            self.state[row,column,side] = 1
         
     def convert_to_wall(self,state):
         """Converts a specific game state array to the wall it represents"""
@@ -164,16 +214,56 @@ class DotsAndBoxes():
                 return False
         return True
         
-    def print_state(self):
+    def __str__(self):
         """Provides a console output of the current state"""
-        walls = []
+        string = ""
+        final_row = []
         for row in range(self.size):
+            column_walls = []
+            
             for column in range(self.size):
-                for side in self.state[row,column]:
-                    if side == 1:
-                        walls.append(self.convert_to_wall([row,column,side]))
+                string += ("{:<1}".format("."))
+                n,s,e,w = self.state[row,column]
+                n_string = ""                
+                if n == 1:
+                    n_string = "----"
+                else:
+                    n_string = " "
+                string += "{:<4}".format(n_string)
+                
+                if w == 1:
+                    column_walls.append("{:<1}".format("|"))
+                else:
+                    column_walls.append("{:<1}".format(" "))
+                    
+                if e == 1 and column == self.size - 1:
+                    column_walls.append("{:<1}".format("|"))
+                    
+                if column == self.size - 1:
+                    string += "{:<1}".format(".")
+                    
+                if s == 1 and row == self.size - 1:
+                    final_row.append("{:<4}".format("____"))
+                elif s == 0 and row == self.size - 1:
+                    final_row.append("{:<4}".format(" "))
+                    
+                    
+            string += "\n"      
+            for wall in column_walls:
+                string += wall
+                string += "{:<4}".format(" ")
+            string += "\n"
+            
+        for wall in final_row:
+            string += ("{:<1}".format("."))
+            string += wall
+            
+        string += ".\n"
+                            
+        return string
+                    
                         
-        print(np.unique(walls))
+        
         
             
             
@@ -181,11 +271,15 @@ class DotsAndBoxes():
                 
 if __name__ == '__main__':
     db = DotsAndBoxes(3)
-    db.print_state()
+    print(db)
     print('----------------------')
-    db.state[1,1,1] = 1
-    db.state[1,1,0] = 1
-    db.print_state()
+    db.build_wall(2)
+    db.build_wall(14)
+    db.build_wall(15)
+    db.build_wall(6)
+    db.build_wall(20)
+    db.build_wall(9)
+    print(db)
         
         
         
