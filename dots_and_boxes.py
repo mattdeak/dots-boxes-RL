@@ -21,25 +21,15 @@ class DotsAndBoxes():
         self.state = np.zeros([size,size,4])
         self._player1 = None
         self._player2 = None
-        self.player_turn = 2   
+        self.current_player = 1
         self.score = {'player1':0,'player2':0}
-        self.action_list = []
+        self.action_list = range(size * (size + 1))
         self.turn = 1 #Which player's turn is it
         self.manual = 0 #No manual player
         self.reward_dictionary = {'win':1,'loss':-1,'draw':0}
         self.rewards = {1:0,2:0}
+        self.SIDES = {'N':0,'S':1,'E':2,'W':3}
         
-        
-    class Sides(Enum):
-        N = 0
-        NORTH = 0
-        S = 1
-        SOUTH = 1
-        E = 2
-        EAST = 2
-        W = 3
-        WEST = 3
-    
     @property    
     def player1(self):
         """Player 1 property getter"""
@@ -64,9 +54,10 @@ class DotsAndBoxes():
         
     def switch_turn(self):
         """Switches the turn"""
-        if self.turn == 1:
-            return 2
-        return 1
+        if self.current_player == 1:
+            self.current_player = 2
+        else:
+            self.current_player = 1
           
     
     def step(self,action):
@@ -89,37 +80,56 @@ class DotsAndBoxes():
             return self.state,reward
         
         #Add a wall where the action dictates
-        self.state[action] = 1
-        action_score = self.made_box(action)
-        if self.made_box(action) > 0:
-            self.score[self.player_turn - 1] += action_score
+        self.build_wall(action)
+        
+        #Determine the score of the action
+        score = self.action_score(action)
+        
+        if self.action_score(action) > 0:
+            self.score[self.current_player - 1] += score
         else:
             self.switch_turn()
         
     
-    def made_box(self,action):
-        """Determine whether the action made a box"""
+    def action_score(self,action):
+        """Determine whether the action made a box and returns the score"""
+        states = self.convert_to_state(action)
+        score = 0
+        
+        for state_index in states:
+            cell_row,cell_column = state_index[:2]
+            if np.sum(self.state[cell_row,cell_column]) == 4:
+                score += 1
+        
+        return score
+        
         
     def play(self):
         """Plays a game"""
-        pass
+        
     
     def reward_payout(self):
         self._player1.receive_reward()
-    
+        
+    def build_wall(self,action):
+        """Builds a wall in the game state"""
+        states = self.convert_to_state(action)
+        for state_index in states:
+            self.state[state_index] = 1
+        
     def convert_to_wall(self,state):
         """Converts a specific game state array to the wall it represents"""
         row,column,side = state
-        if side == self.Sides.N:
+        if side == self.SIDES['N']:
             return row * self.size + column
-        elif side == self.Sides.S:
+        elif side == self.SIDES['S']:
             return (row + 1) * self.size + column
-        elif side == self.Sides.E:
+        elif side == self.SIDES['E']:
             return (self.size * (self.size + 1)) + row * self.size + column
-        elif side == self.Sides.W:
+        elif side == self.SIDES['W']:
             return (self.size * (self.size + 1)) + row * self.size + (column + 1)
         else:
-            raise ValueError("Can't convert state to wall. 3rd Dimension must be range [0-3]")
+            raise ValueError("Can't convert state to wall. 3rd Dimension must be range [0-3]. Value given: {}".format(side))
             
     
     def convert_to_state(self,wall_number):
@@ -130,47 +140,42 @@ class DotsAndBoxes():
             cell_column = wall_number % self.size
             cell_row = wall_number // self.size
             if cell_row != 0:
-                cells.append([cell_row - 1, cell_column, self.Sides.S])
+                cells.append([cell_row - 1, cell_column, self.SIDES['S']])
             if cell_row != self.size:
-                cells.append([cell_row, cell_column, self.Sides.N])
+                cells.append([cell_row, cell_column, self.SIDES['N']])
         #Otherwise the wall is E-W        
         else:
             cell_row = (wall_number-(self.size * (self.size + 1)))//(self.size + 1)
             cell_column = wall_number % (self.size + 1)
             if cell_column != 0:
-                cells.append([cell_row, cell_column - 1, self.Sides.E])
+                cells.append([cell_row, cell_column - 1, self.SIDES['E']])
                 
             if cell_column != self.size:
-                cells.append([cell_row, cell_column, self.Sides,W])
+                cells.append([cell_row, cell_column, self.SIDES['W']])
                 
         return cells
                 
-     
-    
+
     def is_valid_action(self,action):
-        
-        return False
+        """Ensures that an action is valid"""
+        states = self.convert_to_state(action)
+        for state_index in states:
+            if self.state[state_index] == 1:
+                return False
+        return True
         
     def print_state(self):
         """Provides a console output of the current state"""
+        walls = []
         for row in range(self.size):
-            column_bars = []
             for column in range(self.size):
-                print(".",end="")
-                if self.state[row,column,1] == 1:
-                    print("-",end="")
-                else:
-                    print(" ",end="")
-                
-                if self.state[row,column,0] == 0:
-                    column_bars.append(" ")
-                else:
-                    column_bars.append("|")
-                
-            print()
-            for c in column_bars:
-                print(c,end="")
-            print()
+                for side in self.state[row,column]:
+                    if side == 1:
+                        walls.append(self.convert_to_wall([row,column,side]))
+                        
+        print(np.unique(walls))
+        
+            
             
             
                 
