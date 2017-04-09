@@ -29,17 +29,35 @@ class Player:
         if self.environment == None:
             raise ValueError("Must add an environment in order to act")
         
-        state = self.environment.state
         #Take an action randomly
-        action = self.choose_action(state)
+        action = self.choose_action()
         self.environment.step(action)
         return action
         
     def receive_reward(self,reward):
         """Random player does nothing"""
         
-    def choose_action(self,state):
+    def choose_action(self):
         """Choose an action randomly in the environment."""
         action = random.choice(self.environment.valid_actions)
         
         return action
+        
+        
+class ManualPlayer(Player):
+    """A player that interacts with the environment according to user input"""
+        
+    def choose_action(self):
+        """Choose an action based on user input"""
+        print ("Current Game Board:\n{}".format(self.environment))
+        action = None
+        while action not in self.environment.valid_actions:
+            print("valid action: {}".format(self.environment.valid_actions))
+            action = int(input("Please choose an action\n>>"))
+        
+        return action
+        
+    
+    
+        
+        
