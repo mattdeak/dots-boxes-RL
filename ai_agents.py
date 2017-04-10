@@ -10,10 +10,10 @@ from numpy import random
 import tensorflow as tf
 from dots_and_boxes import DotsAndBoxes
 
-class QLearnerMC(Player):
+class TDLearner(Player):
     """Monte Carlo Funcion Approximation"""
     
-    def __init__(self,alpha=0.01,epsilon=0.05,gamma=0.9,lmbda = 1):
+    def __init__(self,alpha=0.01,epsilon=0.05,gamma=0.95,lmbda = 1):
         """Initializes the SARSA agent.
         
         Attributes:
@@ -29,15 +29,18 @@ class QLearnerMC(Player):
         self.epsilon = epsilon
         self.alpha = alpha
         self.learning = True
-        self.sess = tf.Session()
-        self.episode_states = []
-
+        self.lmbda = lmbda
+        self.gamma = gamma
+        self.sess = None
         # Variables needed for Q function
-        self.Q_values = None
+        self.Q_value = None
         self.input_matrix = None
+        
+        self.last_state = None
+        self.last_action = None
 
         self.target_Q = None
-        self.optimizer = tf.train.AdamOptimizer(self.alpha)
+        self.optimizer = None
         self.update_model = None
 
     @property
@@ -54,14 +57,18 @@ class QLearnerMC(Player):
         """
         state = self._environment.state
         feature_vector = self.generate_input_vector(state)
-
+        
+        #TD-Update with 0
+        if self.last_state is not None:
+            self.td_update(self.last_state, self.last_action, feature_vector, 0)
+        
         # Choose an action if this is the first state in the episode
         action = self.choose_action(feature_vector)
         
-        self._environment.step(self.action)
+        self._environment.step(action)
 
-        self.episode_states.append((feature_vector,action))
-
+        self.last_state = feature_vector
+        self.last_action = action
 
     def generate_input_vector(self, state):
         r, c, d = state.shape
@@ -69,7 +76,7 @@ class QLearnerMC(Player):
         return input_vector
 
     def receive_reward(self, reward):
-        self.mc_update(self, self.last_state, self.environment.state, reward)
+        self.td_update(self.last_state, self.last_action, None, reward)
             
     def choose_action(self, feature_vector):
         """Chooses an action based on an epsilon-greedy SARSA policy"""
@@ -87,21 +94,28 @@ class QLearnerMC(Player):
         q_values = self.sess.run(self.Q_values, feed_dict={self.input_matrix: feature_vector})[0]
         return q_values
        
-    def mc_update(self, feature_vector, next_state, reward):
+    def td_update(self, feature_vector, action, next_feature_vector, reward):
         """Updates the Q_function according to the SARSA update algorithm"""
-        for state, action in self.episode_states:
-            action_vector = np.zeros(self.state.shape)
-
+        # If the next state is terminal, we only care about the reward
+        if next_feature_vector is None:
+            q_next = np.zeros(len(self.environment.action_list))
+        else:
+            q_next = self.get_Q_values(next_feature_vector)
+            
         # Generate a target Q value
-        target = reward * self.gamma*q_next
+        target = self.gamma*q_next
+        ## Update only the action we took
+        target[action] += reward
         
-        # Update Q model
+        # Update Q model according to target
         self.sess.run(self.update_model, feed_dict={self.target_Q: target, self.input_matrix: feature_vector})
-
-
        
     def _build_model(self):
         """Generates the neural network for the Q Function"""
+        tf.reset_default_graph()
+        self.sess = tf.Session()
+        
+        
         row, column, depth = self._environment.state.shape
         self.input_matrix = tf.placeholder(tf.float32, [None, row, column, depth])
         output_size = len(self._environment.action_list)
@@ -109,48 +123,50 @@ class QLearnerMC(Player):
         conv2_shape = [2, 2, 12, 36]
 
         # Set up weights and biases for convolutional layers
-        W1 = tf.Variable(tf.truncated_normal(conv1_shape, stddev=0.1))
-        B1 = tf.Variable(tf.truncated_normal([12], stddev=0.1))
-        W2 = tf.Variable(tf.truncated_normal(conv2_shape, stddev=0.1))
-        B2 = tf.Variable(tf.truncated_normal([36], stddev=0.1))
+        W1 = tf.Variable(tf.truncated_normal(conv1_shape, stddev=0.1),name='W1')
+        B1 = tf.Variable(tf.truncated_normal([12], stddev=0.1),name='B1')
+        W2 = tf.Variable(tf.truncated_normal(conv2_shape, stddev=0.1),name='W2')
+        B2 = tf.Variable(tf.truncated_normal([36], stddev=0.1),name='B2')
 
         # Helper function for conv layers
         def conv2d(x,W,strides=[1, 1, 1, 1]):
             return tf.nn.conv2d(x, W, strides=strides, padding='SAME')
         
         # Create convolutional layers
-        h1 = tf.nn.relu(tf.add(conv2d(self.input_matrix, W1, strides=[1, 1, 1, 1]), B1))
-        h2 = tf.nn.relu(tf.add(conv2d(h1, W2), B2))
+        h1 = tf.nn.relu(tf.add(conv2d(self.input_matrix, W1, strides=[1, 1, 1, 1]), B1),name='Conv1')
+        h2 = tf.nn.relu(tf.add(conv2d(h1, W2), B2),name='Conv2')
 
         # Create flattened layer
         h2_shape = h2.get_shape().as_list()[1:]
         flattened = tf.reshape(h2, [-1, np.prod(h2_shape)])
 
         # Create FC and output variables
-        W3 = tf.Variable(tf.truncated_normal([flattened.get_shape().as_list()[1], 150], stddev=0.1))
-        B3 = tf.Variable(tf.truncated_normal([150], stddev=0.1))
-        outputW = tf.Variable(tf.truncated_normal([150, output_size], stddev=0.1))
-        outputB = tf.Variable(tf.truncated_normal([output_size], stddev=0.1))
+        W3 = tf.Variable(tf.truncated_normal([flattened.get_shape().as_list()[1], 150], stddev=0.1),name='W3')
+        B3 = tf.Variable(tf.truncated_normal([150], stddev=0.1),name='B3')
+        outputW = tf.Variable(tf.truncated_normal([150, output_size], stddev=0.1),name='outputW')
+        outputB = tf.Variable(tf.truncated_normal([output_size], stddev=0.1),name='outputB')
 
         # Create FC and output layer
-        h3 = tf.nn.relu(tf.add(tf.matmul(flattened, W3), B3))
-        output = tf.add(tf.matmul(h3, outputW), outputB)
-
-        # Initialize all variables
-        init = tf.initialize_all_variables()
-        self.sess.run(init)
+        h3 = tf.nn.relu(tf.add(tf.matmul(flattened, W3), B3),name='FC')
+        output = tf.add(tf.matmul(h3, outputW), outputB,name='output')
 
         # Assign to output
         self.Q_values = output
 
         # Create update structure
-        self.target_Q = tf.placeholder(tf.float32, [output_size])
+        self.target_Q = tf.placeholder(tf.float32,[output_size])
         loss = tf.reduce_sum(tf.square(self.target_Q - self.Q_values))
+        self.optimizer = tf.train.AdamOptimizer(self.alpha)
         self.update_model = self.optimizer.minimize(loss)
+        
+        # Initialize all variables
+        init = tf.global_variables_initializer()
+        self.sess.run(init)
 
 
 
-
+if __name__ == '__main__':
+    s = TDLearner()
 
         
         
