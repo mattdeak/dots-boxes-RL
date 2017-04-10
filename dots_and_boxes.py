@@ -7,6 +7,7 @@ Created on Sat Apr  8 21:52:43 2017
 
 import numpy as np
 from collections import defaultdict
+from time import sleep
 
 class DotsAndBoxes():
     """The main environment for a dots and boxes game"""
@@ -116,16 +117,16 @@ class DotsAndBoxes():
                 scored = True
                 
         return scored
-            
-        
-        
-    def play(self,log=False):
+
+    def play(self, log=False, pause=None):
         """Plays a game"""
         self._initialize_game()
         game_log = []
         
         while self.state is not None:
-            
+            if pause is not None:
+                sleep(pause)
+
             if log:
                 game_log.append("\nState:\n{}\n".format(self))
                 action = self.current_player.act()
