@@ -27,6 +27,7 @@ class DotsAndBoxes():
         self.valid_actions = None
         self.manual = 0 #No manual player
         self.reward_dictionary = {'win':1,'loss':-1,'draw':0}
+        self.captured_cells = defaultdict(list)
         self.SIDES = {'N':0,'S':1,'E':2,'W':3}
         
     @property    
@@ -73,9 +74,6 @@ class DotsAndBoxes():
             self._player1.receive_reward(self.reward_dictionary['win'])
             self._player2.receive_reward(self.reward_dictionary['loss'])
             
-
-            
-    
     def end_game(self):
         """Ends the Game"""
         self.payout()
@@ -84,42 +82,41 @@ class DotsAndBoxes():
     
     def step(self,action):
         """Takes an action and changes the game state."""
-        
-        
-        
         #If an action is invalid and the environment is set to quit
         #on an invalid action, set the reward to loss and return
         #the terminal state. Otherwise, simply return the state without
         #switching turns, to give the player another chance.
         if not self.is_valid_action:
-            if self.manual != self.player_turn:
-                self.endGame('loss')
+                self.endGame()
         
         #Add a wall where the action dictates
         self.build_wall(action)
         
         #Determine the score of the action
-        score = self.action_score(action)
-        self.score[self.current_player] += score
+        scored = self.score_action(action)
+        #Remove the action from the list of valid actions
         self.valid_actions.remove(action)            
         if self.valid_actions == []:
             self.end_game()
         else:
-            if score == 0:
+            if not scored:
                 self.switch_turn()
         
     
-    def action_score(self,action):
-        """Determine whether the action made a box and returns the score"""
+    def score_action(self,action):
+        """Scores the action and returns whether"""
         states = self.convert_to_state(action)
-        score = 0
+        scored = False
         
         for state_index in states:
             cell_row,cell_column = state_index[:2]
             if np.sum(self.state[cell_row,cell_column]) == 4:
-                score += 1
-        
-        return score
+                self.captured_cells[self.current_player].append([cell_row,cell_column])
+                self.score[self.current_player] += 1
+                scored = True
+                
+        return scored
+            
         
         
     def play(self,log=False):
@@ -139,16 +136,17 @@ class DotsAndBoxes():
                 self.current_player.act()
                 
         if game_log:
-            finish = ""
             if self.score[self._player1] > self.score[self._player2]:
-                finish = "Player 1 Wins!"
+                winner = self._player1
             elif self.score[self._player1] == self.score[self._player2]:
-                finish = "Draw!"
+                winner = None
             else:
-                finish = "Player 2 Wins!"
-            game_log.append(finish)
+                winner = self._player2
+            
+            
+            game_log.append("Winner: {}".format(winner))
                 
-        return game_log
+        return game_log,winner
         
         
     def _initialize_game(self):
@@ -183,9 +181,9 @@ class DotsAndBoxes():
             
     
     def convert_to_state(self,wall_number):
-        """Converts a wall number to the specific game states that it represents"""
-        #If this is true, the wall is on the N-S
+        """Converts a wall number to the specific game states that it represents"""        
         cells = []
+        #If this is true, the wall is on the N-S
         if wall_number < ((self.size) * (self.size + 1)):
             cell_column = wall_number % self.size
             cell_row = wall_number // self.size
@@ -259,6 +257,8 @@ class DotsAndBoxes():
             string += wall
             
         string += ".\n"
+        
+        string += "\nPlayer 1 Score is {}\nPlayer 2 Score is {}\n".format(self.score[self._player1],self.score[self._player2])
                             
         return string
                     
