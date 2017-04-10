@@ -12,8 +12,7 @@ from time import sleep
 class DotsAndBoxes():
     """The main environment for a dots and boxes game"""
     
-    DOWN = 0
-    RIGHT = 1
+
     
     def __init__(self,size=2):
         """Initializer"""
@@ -34,7 +33,7 @@ class DotsAndBoxes():
     @property    
     def player1(self):
         """Player 1 property getter"""
-        return self._player
+        return self._player1
         
     @property
     def player2(self):
@@ -46,7 +45,8 @@ class DotsAndBoxes():
         """Sets the player and adds current game instance as the agent environment"""
         agent.environment = self
         self._player1 = agent
-        self._player1.name = "Player 1"
+        if self._player1.name is None:
+            self._player1.name = "Player 1"
         self.current_player = self._player1
       
     @player2.setter
@@ -54,6 +54,8 @@ class DotsAndBoxes():
         """Sets the player and adds current game instance as the agent environment"""
         agent.environment = self
         self._player2 = agent
+        if self._player1.name is None:
+            self._player1.name = "Player 2"
         self._player2.name = "Player 2"
         
     def switch_turn(self):
@@ -77,11 +79,12 @@ class DotsAndBoxes():
             
     def end_game(self,exit_status=None):
         """Ends the Game"""
+        self.state = None
         if exit_status is None:
             self.payout()
         else:
             self.current_player.receive_reward(self.reward_dictionary[exit_status])
-        self.state = None
+        
     
     
     def step(self,action):

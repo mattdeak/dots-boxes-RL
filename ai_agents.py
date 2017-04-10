@@ -13,7 +13,7 @@ from dots_and_boxes import DotsAndBoxes
 class TDLearner(Player):
     """Monte Carlo Funcion Approximation"""
     
-    def __init__(self,alpha=0.01,epsilon=0.05,gamma=0.95,lmbda = 1):
+    def __init__(self,name,alpha=0.01,epsilon=0.05,gamma=0.95,lmbda = 1):
         """Initializes the SARSA agent.
         
         Attributes:
@@ -26,11 +26,14 @@ class TDLearner(Player):
             action: Next action to be taken in the environment
         """
         super().__init__()
+        self.name = name
         self.epsilon = epsilon
         self.alpha = alpha
         self.learning = True
         self.lmbda = lmbda
         self.gamma = gamma
+        self.save_count = 0
+        
         self.sess = None
         # Variables needed for Q function
         self.Q_value = None
@@ -38,7 +41,7 @@ class TDLearner(Player):
         
         self.last_state = None
         self.last_action = None
-
+        self.saver = None
         self.target_Q = None
         self.optimizer = None
         self.update_model = None
@@ -50,7 +53,8 @@ class TDLearner(Player):
     @environment.setter
     def environment(self, environment):
         self._environment = environment
-        self._build_model()
+        if self.sess is None:
+            self._build_model()
         
     def act(self):
         """Chooses an action according to the SARSA lambda algorithm
@@ -62,13 +66,16 @@ class TDLearner(Player):
         if self.last_state is not None:
             self.td_update(self.last_state, self.last_action, feature_vector, 0)
         
-        # Choose an action if this is the first state in the episode
+        # Choose an action
         action = self.choose_action(feature_vector)
         
-        self._environment.step(action)
-
         self.last_state = feature_vector
         self.last_action = action
+        
+        self._environment.step(action)
+        
+        return action
+
 
     def generate_input_vector(self, state):
         r, c, d = state.shape
@@ -110,6 +117,20 @@ class TDLearner(Player):
         # Update Q model according to target
         self.sess.run(self.update_model, feed_dict={self.target_Q: target, self.input_matrix: feature_vector})
        
+   
+        
+    def save_model(self,checkpoint_name=None):
+        """Saves a model and returns the name of the checkpoint"""
+        if checkpoint_name is None:
+            checkpoint_name = "model{}".format(self.save_count)
+        self.saver.save(self.sess, checkpoint_name)
+        self.save_count += 1
+        return checkpoint_name
+        
+    def load_model(self,checkpoint_name):
+        """Restores a model from checkpoint"""
+        self.saver.restore(self.sess, checkpoint_name)
+        
     def _build_model(self):
         """Generates the neural network for the Q Function"""
         tf.reset_default_graph()
@@ -117,7 +138,7 @@ class TDLearner(Player):
         
         
         row, column, depth = self._environment.state.shape
-        self.input_matrix = tf.placeholder(tf.float32, [None, row, column, depth])
+        self.input_matrix = tf.placeholder(tf.float32, [None, row, column, depth],name='X')
         output_size = len(self._environment.action_list)
         conv1_shape = [3, 3, 4, 12]
         conv2_shape = [2, 2, 12, 36]
@@ -138,7 +159,7 @@ class TDLearner(Player):
 
         # Create flattened layer
         h2_shape = h2.get_shape().as_list()[1:]
-        flattened = tf.reshape(h2, [-1, np.prod(h2_shape)])
+        flattened = tf.reshape(h2, [-1, np.prod(h2_shape)], name='Flattened')
 
         # Create FC and output variables
         W3 = tf.Variable(tf.truncated_normal([flattened.get_shape().as_list()[1], 150], stddev=0.1),name='W3')
@@ -154,14 +175,18 @@ class TDLearner(Player):
         self.Q_values = output
 
         # Create update structure
-        self.target_Q = tf.placeholder(tf.float32,[output_size])
+        self.target_Q = tf.placeholder(tf.float32,[output_size],'Target')
         loss = tf.reduce_sum(tf.square(self.target_Q - self.Q_values))
         self.optimizer = tf.train.AdamOptimizer(self.alpha)
         self.update_model = self.optimizer.minimize(loss)
         
+        self.saver = tf.train.Saver()
+        
         # Initialize all variables
         init = tf.global_variables_initializer()
         self.sess.run(init)
+        
+        
 
 
 
