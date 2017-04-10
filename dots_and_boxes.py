@@ -75,9 +75,12 @@ class DotsAndBoxes():
             self._player1.receive_reward(self.reward_dictionary['win'])
             self._player2.receive_reward(self.reward_dictionary['loss'])
             
-    def end_game(self):
+    def end_game(self,exit_status=None):
         """Ends the Game"""
-        self.payout()
+        if exit_status is None:
+            self.payout()
+        else:
+            self.current_player.receive_reward(self.reward_dictionary[exit_status])
         self.state = None
     
     
@@ -87,21 +90,21 @@ class DotsAndBoxes():
         #on an invalid action, set the reward to loss and return
         #the terminal state. Otherwise, simply return the state without
         #switching turns, to give the player another chance.
-        if not self.is_valid_action:
-                self.endGame()
-        
-        #Add a wall where the action dictates
-        self.build_wall(action)
-        
-        #Determine the score of the action
-        scored = self.score_action(action)
-        #Remove the action from the list of valid actions
-        self.valid_actions.remove(action)            
-        if self.valid_actions == []:
-            self.end_game()
+        if not self.is_valid_action(action):
+                self.end_game('loss')
         else:
-            if not scored:
-                self.switch_turn()
+            #Add a wall where the action dictates
+            self.build_wall(action)
+            
+            #Determine the score of the action
+            scored = self.score_action(action)
+            #Remove the action from the list of valid actions
+            self.valid_actions.remove(action)            
+            if self.valid_actions == []:
+                self.end_game()
+            else:
+                if not scored:
+                    self.switch_turn()
         
     
     def score_action(self,action):
@@ -122,11 +125,11 @@ class DotsAndBoxes():
         """Plays a game"""
         self._initialize_game()
         game_log = []
+        winner = None
         
         while self.state is not None:
             if pause is not None:
                 sleep(pause)
-
             if log:
                 game_log.append("\nState:\n{}\n".format(self))
                 action = self.current_player.act()
@@ -209,7 +212,8 @@ class DotsAndBoxes():
         """Ensures that an action is valid"""
         states = self.convert_to_state(action)
         for state_index in states:
-            if self.state[state_index] == 1:
+            r,c,s = state_index
+            if self.state[r,c,s] == 1:
                 return False
         return True
         
