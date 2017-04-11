@@ -7,6 +7,7 @@ Created on Sat Apr  8 21:52:43 2017
 
 import numpy as np
 from collections import defaultdict
+from numpy import random
 from time import sleep
 
 class DotsAndBoxes():
@@ -28,6 +29,7 @@ class DotsAndBoxes():
         self.manual = 0 #No manual player
         self.reward_dictionary = {'win':1,'loss':-1,'draw':0}
         self.captured_cells = defaultdict(list)
+        self.exit_code = None
         self.SIDES = {'N':0,'S':1,'E':2,'W':3}
         
     @property    
@@ -54,9 +56,8 @@ class DotsAndBoxes():
         """Sets the player and adds current game instance as the agent environment"""
         agent.environment = self
         self._player2 = agent
-        if self._player1.name is None:
-            self._player1.name = "Player 2"
-        self._player2.name = "Player 2"
+        if self._player2.name is None:
+            self._player2.name = "Player 2"
         
     def switch_turn(self):
         """Switches the turn"""
@@ -77,13 +78,13 @@ class DotsAndBoxes():
             self._player1.receive_reward(self.reward_dictionary['win'])
             self._player2.receive_reward(self.reward_dictionary['loss'])
             
-    def end_game(self,exit_status=None):
+    def end_game(self):
         """Ends the Game"""
         self.state = None
-        if exit_status is None:
+        if self.exit_code is None:
             self.payout()
         else:
-            self.current_player.receive_reward(self.reward_dictionary[exit_status])
+            self.current_player.receive_reward(self.reward_dictionary[self.exit_code])
         
     
     
@@ -93,9 +94,14 @@ class DotsAndBoxes():
         #on an invalid action, set the reward to loss and return
         #the terminal state. Otherwise, simply return the state without
         #switching turns, to give the player another chance.
-        if not self.is_valid_action(action):
-                self.end_game('loss')
+        if (not self.is_valid_action(action)) and self.current_player.learning:
+                raise ValueError("Should not be here anymore!")
+                self.exit_code = 'loss'
+                self.end_game()
         else:
+            #If the agent is not learning, just choose a random action
+            if not self.is_valid_action(action):
+                action = random.choice(self.valid_actions)
             #Add a wall where the action dictates
             self.build_wall(action)
             
@@ -128,37 +134,48 @@ class DotsAndBoxes():
         """Plays a game"""
         self._initialize_game()
         game_log = []
-        winner = None
+        state_log = []
+        game_length = 0
+        winner = ""
         
         while self.state is not None:
             if pause is not None:
                 sleep(pause)
             if log:
                 game_log.append("\nState:\n{}\n".format(self))
+                acting_player = str(self.current_player)
+                state_log.append(self.state)
                 action = self.current_player.act()
-                game_log.append("{} built wall {}".format(self.current_player,action))
+                game_log.append("{} built wall {}".format(acting_player, action))
                 game_log.append("Current Player 1 Score: {}".format(self.score[self._player1]))
                 game_log.append("Current Player 2 Score: {}".format(self.score[self._player2]))
+
+                game_length += 1
             else:
                 self.current_player.act()
                 
-        if game_log:
-            if self.score[self._player1] > self.score[self._player2]:
-                winner = self._player1
-            elif self.score[self._player1] == self.score[self._player2]:
-                winner = None
+        if log:
+            if self.exit_code == 'loss':
+                if self.current_player == self._player1:
+                    winner = self._player2
+                else:
+                    winner = self._player1
             else:
-                winner = self._player2
-            
-            
+                if self.score[self._player1] > self.score[self._player2]:
+                    winner = self._player1
+                elif self.score[self._player1] == self.score[self._player2]:
+                    winner = None
+                else:
+                    winner = self._player2
+
             game_log.append("Winner: {}".format(winner))
                 
-        return game_log,winner
-        
-        
+        return game_log, str(winner), game_length, state_log
+
     def _initialize_game(self):
         self.valid_actions = [i for i in range(self.size * (self.size + 1) * 2)]
         self.score = defaultdict(int)
+        self.exit_code = None
         self.state = np.zeros([self.size,self.size,4])
         
     
@@ -268,6 +285,56 @@ class DotsAndBoxes():
         
         string += "\nPlayer 1 Score is {}\nPlayer 2 Score is {}\n".format(self.score[self._player1],self.score[self._player2])
                             
+        return string
+
+    def print_state(self,state):
+        """Provides a console output of the current state"""
+        string = ""
+        final_row = []
+        for row in range(self.size):
+            column_walls = []
+
+            for column in range(self.size):
+                string += ("{:<1}".format("."))
+                n, s, e, w = state[row, column]
+                n_string = ""
+                if n == 1:
+                    n_string = "----"
+                else:
+                    n_string = " "
+                string += "{:<4}".format(n_string)
+
+                if w == 1:
+                    column_walls.append("{:<1}".format("|"))
+                else:
+                    column_walls.append("{:<1}".format(" "))
+
+                if e == 1 and column == self.size - 1:
+                    column_walls.append("{:<1}".format("|"))
+
+                if column == self.size - 1:
+                    string += "{:<1}".format(".")
+
+                if s == 1 and row == self.size - 1:
+                    final_row.append("{:<4}".format("____"))
+                elif s == 0 and row == self.size - 1:
+                    final_row.append("{:<4}".format(" "))
+
+            string += "\n"
+            for wall in column_walls:
+                string += wall
+                string += "{:<4}".format(" ")
+            string += "\n"
+
+        for wall in final_row:
+            string += ("{:<1}".format("."))
+            string += wall
+
+        string += ".\n"
+
+        string += "\nPlayer 1 Score is {}\nPlayer 2 Score is {}\n".format(self.score[self._player1],
+                                                                          self.score[self._player2])
+
         return string
                     
                         
