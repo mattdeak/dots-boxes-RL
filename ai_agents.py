@@ -33,11 +33,13 @@ class TDLearner(Player):
         self.lmbda = lmbda
         self.gamma = gamma
         self.save_count = 0
+        self.DQN = []
         
         self.sess = None
         # Variables needed for Q function
         self.Q_value = None
         self.input_matrix = None
+        self.learning = True
         
         self.last_state = None
         self.last_action = None
@@ -63,7 +65,7 @@ class TDLearner(Player):
         feature_vector = self.generate_input_vector(state)
         
         #TD-Update with 0
-        if self.last_state is not None:
+        if self.last_state is not None and self.learning:
             self.td_update(self.last_state, self.last_action, feature_vector, 0)
         
         # Choose an action
@@ -83,7 +85,8 @@ class TDLearner(Player):
         return input_vector
 
     def receive_reward(self, reward):
-        self.td_update(self.last_state, self.last_action, None, reward)
+        if self.learning:
+            self.td_update(self.last_state, self.last_action, None, reward)
             
     def choose_action(self, feature_vector):
         """Chooses an action based on an epsilon-greedy SARSA policy"""
@@ -91,7 +94,7 @@ class TDLearner(Player):
             chosen_action = np.random.choice(self._environment.valid_actions)
         else:
             q_values = self.get_Q_values(feature_vector)
-            best_actions = np.where(q_values == q_values.max())[0]
+            best_actions = np.where(q_values == q_values[self._environment.valid_actions].max())[0]
             chosen_action = random.choice(best_actions)
        
         return chosen_action
@@ -116,20 +119,28 @@ class TDLearner(Player):
         
         # Update Q model according to target
         self.sess.run(self.update_model, feed_dict={self.target_Q: target, self.input_matrix: feature_vector})
-       
-   
-        
-    def save_model(self,checkpoint_name=None):
+
+    def save_model(self,checkpoint_name=None, global_step=None):
         """Saves a model and returns the name of the checkpoint"""
-        if checkpoint_name is None:
-            checkpoint_name = "model{}".format(self.save_count)
-        self.saver.save(self.sess, checkpoint_name)
-        self.save_count += 1
-        return checkpoint_name
-        
-    def load_model(self,checkpoint_name):
+        self.saver.save(self.sess, checkpoint_name, global_step=global_step)
+
+    def load_model(self,model_dir):
         """Restores a model from checkpoint"""
-        self.saver.restore(self.sess, checkpoint_name)
+        self.saver.restore(self.sess, tf.train.latest_checkpoint(model_dir))
+
+    def save_DQN(self):
+        """Saves the DQN in a CSV file"""
+
+    def load_DQN(self,path):
+        """Load a DQN from CSV file"""
+
+
+    def get_variable(self,var_name):
+        variable = self.sess.run(var_name)
+        return variable
+
+    def list_variables(self):
+        return [v.name for v in tf.trainable_variables()]
         
     def _build_model(self):
         """Generates the neural network for the Q Function"""
@@ -158,17 +169,20 @@ class TDLearner(Player):
         h2 = tf.nn.relu(tf.add(conv2d(h1, W2), B2),name='Conv2')
 
         # Create flattened layer
-        h2_shape = h2.get_shape().as_list()[1:]
-        flattened = tf.reshape(h2, [-1, np.prod(h2_shape)], name='Flattened')
+        h1_shape = h1.get_shape().as_list()[1:]
+        flattened = tf.reshape(h1, [-1, np.prod(h1_shape)], name='Flattened')
 
         # Create FC and output variables
-        W3 = tf.Variable(tf.truncated_normal([flattened.get_shape().as_list()[1], 150], stddev=0.1),name='W3')
-        B3 = tf.Variable(tf.truncated_normal([150], stddev=0.1),name='B3')
-        outputW = tf.Variable(tf.truncated_normal([150, output_size], stddev=0.1),name='outputW')
+        W3 = tf.Variable(tf.truncated_normal([flattened.get_shape().as_list()[1], 128], stddev=0.1),name='W3')
+        B3 = tf.Variable(tf.truncated_normal([128], stddev=0.1),name='B3')
+        #W4 = tf.Variable(tf.truncated_normal([200, 200], stddev=0.1), name='W4')
+        #B4 = tf.Variable(tf.truncated_normal([200], stddev=0.1), name='B3')
+        outputW = tf.Variable(tf.truncated_normal([128, output_size], stddev=0.1),name='outputW')
         outputB = tf.Variable(tf.truncated_normal([output_size], stddev=0.1),name='outputB')
 
         # Create FC and output layer
         h3 = tf.nn.relu(tf.add(tf.matmul(flattened, W3), B3),name='FC')
+        #h4 = tf.nn.relu(tf.add(tf.matmul(h3,W4), B4), name='FC2')
         output = tf.add(tf.matmul(h3, outputW), outputB,name='output')
 
         # Assign to output
@@ -176,7 +190,7 @@ class TDLearner(Player):
 
         # Create update structure
         self.target_Q = tf.placeholder(tf.float32,[output_size],'Target')
-        loss = tf.reduce_sum(tf.square(self.target_Q - self.Q_values))
+        loss = tf.reduce_mean(tf.square(self.target_Q - self.Q_values))
         self.optimizer = tf.train.AdamOptimizer(self.alpha)
         self.update_model = self.optimizer.minimize(loss)
         
