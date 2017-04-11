@@ -11,14 +11,14 @@ class Player:
     """The base class for players integrating with an environment.
     """
 
-    def __init__(self):
+    def __init__(self,name=None):
         """Initializer for the base interactive agent.
         
         Attributes:
             environment: The environment that this class is acting on. 
         """
         self._environment = None
-        self.name = None
+        self.name = name
 
     @property
     def environment(self):
