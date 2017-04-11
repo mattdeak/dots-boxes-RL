@@ -13,7 +13,7 @@ from dots_and_boxes import DotsAndBoxes
 class TDLearner(Player):
     """Monte Carlo Funcion Approximation"""
     
-    def __init__(self,name,alpha=0.01,epsilon=0.05,gamma=0.95,lmbda = 1):
+    def __init__(self,name,alpha=0.01,epsilon=0.05,gamma=0.95,lmbda = 1,d_size=10000,update_size=50):
         """Initializes the SARSA agent.
         
         Attributes:
@@ -33,10 +33,16 @@ class TDLearner(Player):
         self.lmbda = lmbda
         self.gamma = gamma
         self.save_count = 0
-        self.DQN = []
-        
-        self.sess = None
+
+        # Deep replay table
+        self.transition_count = 0
+        self.replay_table = None
+        self.replay_size = d_size
+        self.update_size = update_size
+
+
         # Variables needed for Q function
+        self.sess = None
         self.Q_value = None
         self.input_matrix = None
         self.learning = True
@@ -94,7 +100,8 @@ class TDLearner(Player):
             chosen_action = np.random.choice(self._environment.valid_actions)
         else:
             q_values = self.get_Q_values(feature_vector)
-            best_actions = np.where(q_values == q_values[self._environment.valid_actions].max())[0]
+            max_valid_q = q_values[self._environment.valid_actions].max()
+            best_actions = np.where(q_values == max_valid_q)[0]
             chosen_action = random.choice(best_actions)
        
         return chosen_action
@@ -106,17 +113,40 @@ class TDLearner(Player):
        
     def td_update(self, feature_vector, action, next_feature_vector, reward):
         """Updates the Q_function according to the SARSA update algorithm"""
-        # If the next state is terminal, we only care about the reward
+        # Update the replay table
+        self.replay_table[self.transition_count] = (feature_vector, action, next_feature_vector, reward)
+        self.transition_count = (self.transition_count + 1) % self.replay_size
+
         if next_feature_vector is None:
             q_next = np.zeros(len(self.environment.action_list))
         else:
             q_next = self.get_Q_values(next_feature_vector)
-            
+
+        # Get uncorrelated mini-batch from episode data once table is filled
+        if self.transition_count > self.update_size:
+            random_tbl = random.choice(self.replay_table[:self.update_size],size=self.update_size)
+            feature_vector = np.vstack(random_tbl['state'])
+            action = random_tbl['action']
+            next_feature_vector = np.vstack(random_tbl['next_state'])
+            reward = random_tbl['reward']
+
+        terminal_ix = np.where(next_feature_vector is None)[0]
+        non_terminal_ix = np.where(next_feature_vector is not None)[0]
+
+        if terminal_ix.size != 0:
+            q_next[terminal_ix] = np.zeros(len(self.environment.action_list))
+
+        if non_terminal_ix.size != 0:
+            q_next[non_terminal_ix] = self.get_Q_values(next_feature_vector[non_terminal_ix])
         # Generate a target Q value
+
         target = self.gamma*q_next
         ## Update only the action we took
         target[action] += reward
-        
+
+        # Reshape target to fit target placeholder
+        target = np.reshape(target,[-1,target.size])
+
         # Update Q model according to target
         self.sess.run(self.update_model, feed_dict={self.target_Q: target, self.input_matrix: feature_vector})
 
@@ -143,6 +173,11 @@ class TDLearner(Player):
         return [v.name for v in tf.trainable_variables()]
         
     def _build_model(self):
+        r,c,d = self._environment.state.shape
+        self.replay_table = np.rec.array(np.zeros(self.replay_size, dtype=[('state','(1,{},{},{})float32'.format(r,c,d)),
+                                                              ('action', 'int8'),
+                                                              ('next_state', '(1,{},{},{})float32'.format(r,c,d)),
+                                                              ('reward','float32')]))
         """Generates the neural network for the Q Function"""
         tf.reset_default_graph()
         self.sess = tf.Session()
@@ -173,23 +208,22 @@ class TDLearner(Player):
         flattened = tf.reshape(h1, [-1, np.prod(h1_shape)], name='Flattened')
 
         # Create FC and output variables
-        W3 = tf.Variable(tf.truncated_normal([flattened.get_shape().as_list()[1], 128], stddev=0.1),name='W3')
-        B3 = tf.Variable(tf.truncated_normal([128], stddev=0.1),name='B3')
+        W3 = tf.Variable(tf.truncated_normal([flattened.get_shape().as_list()[1], 256], stddev=0.1),name='W3')
+        B3 = tf.Variable(tf.truncated_normal([256], stddev=0.1),name='B3')
         #W4 = tf.Variable(tf.truncated_normal([200, 200], stddev=0.1), name='W4')
         #B4 = tf.Variable(tf.truncated_normal([200], stddev=0.1), name='B3')
-        outputW = tf.Variable(tf.truncated_normal([128, output_size], stddev=0.1),name='outputW')
+        outputW = tf.Variable(tf.truncated_normal([256, output_size], stddev=0.1),name='outputW')
         outputB = tf.Variable(tf.truncated_normal([output_size], stddev=0.1),name='outputB')
 
         # Create FC and output layer
         h3 = tf.nn.relu(tf.add(tf.matmul(flattened, W3), B3),name='FC')
         #h4 = tf.nn.relu(tf.add(tf.matmul(h3,W4), B4), name='FC2')
         output = tf.add(tf.matmul(h3, outputW), outputB,name='output')
-
         # Assign to output
         self.Q_values = output
 
         # Create update structure
-        self.target_Q = tf.placeholder(tf.float32,[output_size],'Target')
+        self.target_Q = tf.placeholder(tf.float32,[None,output_size],'Target')
         loss = tf.reduce_mean(tf.square(self.target_Q - self.Q_values))
         self.optimizer = tf.train.AdamOptimizer(self.alpha)
         self.update_model = self.optimizer.minimize(loss)

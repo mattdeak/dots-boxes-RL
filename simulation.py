@@ -63,8 +63,18 @@ def self_play_simulation(environment,train_agent,target_agent,n_games,update_ste
             
     game_logs = []
     test_logs = []
+
+    environment.player1 = train_agent
+    environment.player2 = target_agent
+
+    try:
+        train_agent.load_model('/home/matthew/Programming/Projects/Dots_and_Boxes/models/')
+        target_agent.load_model('/home/matthew/Programming/Projects/Dots_and_Boxes/models/')
+    except:
+        print("Attempted load and failed")
+
     for game_number in range(1,n_games+1):
-        
+        print(game_number)
         environment.player1 = train_agent
         environment.player2 = target_agent
 
@@ -90,7 +100,8 @@ def self_play_simulation(environment,train_agent,target_agent,n_games,update_ste
                 #             print()
 
             #Give the target agent the most recent model
-            train_agent.save_model('/home/matthew/Programming/Projects/Dots_and_Boxes/models/',global_step=update_step)
+            print("Updating Model")
+            train_agent.save_model('/home/matthew/Programming/Projects/Dots_and_Boxes/models/',global_step=game_number)
             target_agent.load_model('/home/matthew/Programming/Projects/Dots_and_Boxes/models/')
                 
     return game_logs, test_logs
@@ -98,8 +109,8 @@ def self_play_simulation(environment,train_agent,target_agent,n_games,update_ste
 
     
 if __name__ == '__main__':
-    game_size = 3
-    train_agent = TDLearner('train',alpha=1e-5)
+    game_size = 4
+    train_agent = TDLearner('train',alpha=1e-4)
     print(train_agent.name)
     target_agent = TDLearner('target')
     target_agent.learning = False
@@ -108,12 +119,9 @@ if __name__ == '__main__':
     test_agent1 = Player('test')
     test_agent2 = SimplePlayer('test_2')
 
-    ##train_agent.load_model('/home/matthew/Programming/Projects/Dots_and_Boxes/models/')
-    ##target_agent.load_model('/home/matthew/Programming/Projects/Dots_and_Boxes/models/')
-
     env = DotsAndBoxes(game_size)
-    n_games = 1000000
-    update_step = 5000
+    n_games = 100000000
+    update_step = 1000
     test_games = 50
     logs, tests = self_play_simulation(env, train_agent, target_agent,
                                        n_games, update_step,

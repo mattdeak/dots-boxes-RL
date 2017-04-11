@@ -95,19 +95,19 @@ class DotsAndBoxes():
         #the terminal state. Otherwise, simply return the state without
         #switching turns, to give the player another chance.
         if (not self.is_valid_action(action)) and self.current_player.learning:
-                raise ValueError("Should not be here anymore!")
+                raise ValueError("Should not be here anymore! Action: {}".format(action))
                 self.exit_code = 'loss'
                 self.end_game()
         else:
-            #If the agent is not learning, just choose a random action
+            # If the agent is not learning, just choose a random action
             if not self.is_valid_action(action):
                 action = random.choice(self.valid_actions)
-            #Add a wall where the action dictates
+            # Add a wall where the action dictates
             self.build_wall(action)
             
-            #Determine the score of the action
+            # Determine the score of the action
             scored = self.score_action(action)
-            #Remove the action from the list of valid actions
+            # Remove the action from the list of valid actions
             self.valid_actions.remove(action)            
             if self.valid_actions == []:
                 self.end_game()
