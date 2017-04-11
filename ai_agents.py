@@ -46,6 +46,7 @@ class TDLearner(Player):
         self.Q_value = None
         self.input_matrix = None
         self.learning = True
+        self.loss = None
         
         self.last_state = None
         self.last_action = None
@@ -77,7 +78,7 @@ class TDLearner(Player):
         # Choose an action
         action = self.choose_action(feature_vector)
         
-        self.last_state = feature_vector
+        self.last_state = feature_vector.copy()
         self.last_action = action
         
         self._environment.step(action)
@@ -93,6 +94,7 @@ class TDLearner(Player):
     def receive_reward(self, reward):
         if self.learning:
             self.td_update(self.last_state, self.last_action, None, reward)
+            self.last_state = None
             
     def choose_action(self, feature_vector):
         """Chooses an action based on an epsilon-greedy SARSA policy"""
@@ -111,29 +113,46 @@ class TDLearner(Player):
         q_values = self.sess.run(self.Q_values, feed_dict={self.input_matrix: feature_vector})
         return q_values
        
-    def td_update(self, feature_vector, action, next_feature_vector, reward):
+    def td_update(self, current_state, last_action, next_state, reward):
         """Updates the Q_function according to the SARSA update algorithm"""
         # Update the replay table
-        self.replay_table[self.transition_count % self.replay_size] = (feature_vector, action, next_feature_vector, reward)
+        self.replay_table[self.transition_count % self.replay_size] = (current_state, last_action, next_state, reward)
         self.transition_count = (self.transition_count + 1)
 
         # Don't start learning until transition table has some data
-        if self.transition_count > self.update_size * 20:
+        if self.transition_count >= self.update_size * 20:
+            if self.transition_count == self.update_size * 20:
+                print("Replay Table is Ready\n")
+                
             random_tbl = random.choice(self.replay_table[:min(self.transition_count,self.replay_size)],size=self.update_size)
-            feature_vector = np.vstack(random_tbl['state'])
-            action = random_tbl['action']
-            next_feature_vector = np.vstack(random_tbl['next_state'])
-            reward = random_tbl['reward']
-            non_terminal_ix = np.where([~np.any(np.isnan(next_feature_vector),axis=(1,2,3))])[1]
-
+            feature_vectors = np.vstack(random_tbl['state'])
+            actions = random_tbl['action']
+            next_feature_vectors = np.vstack(random_tbl['next_state'])
+            rewards = random_tbl['reward']
+            
+            # Get the indices of the non-terminal states
+            non_terminal_ix = np.where([~np.any(np.isnan(next_feature_vectors),axis=(1,2,3))])[1]
+                                       
+            # Default q_next will be all zeros (this will encompass terminal states)
+            q_current = self.get_Q_values(feature_vectors)
             q_next = np.zeros([self.update_size,len(self.environment.action_list)])
-            q_next[non_terminal_ix] = self.get_Q_values(next_feature_vector[non_terminal_ix])
-
-            target = self.gamma * q_next
-            target[np.arange(len(target)), action] += reward
-
+            q_next[non_terminal_ix] = self.get_Q_values(next_feature_vectors[non_terminal_ix])
+            
+            # We want the target to mostly be equal to Q_current
+            target = q_current.copy()
+            
+            # Only actions that have been taken should be updated with the reward
+            target[np.arange(len(target)), actions] += (rewards + self.gamma*q_next.max(axis=1))
+            
+            #print(q_current)
+            
             # Update Q model according to target
-            self.sess.run(self.update_model, feed_dict={self.target_Q: target, self.input_matrix: feature_vector})
+#==============================================================================
+#             print("Update: {}".format(target - q_current))
+#             print("Actions: {}".format(action))
+#==============================================================================
+            
+            self.sess.run(self.update_model, feed_dict={self.target_Q: target, self.input_matrix: feature_vectors})
 
     def save_model(self,checkpoint_name=None, global_step=None):
         """Saves a model and returns the name of the checkpoint"""
@@ -176,9 +195,9 @@ class TDLearner(Player):
 
         # Set up weights and biases for convolutional layers
         W1 = tf.Variable(tf.truncated_normal(conv1_shape, stddev=0.1),name='W1')
-        B1 = tf.Variable(tf.truncated_normal([12], stddev=0.1),name='B1')
+        B1 = tf.Variable(tf.zeros(12),name='B1')
         W2 = tf.Variable(tf.truncated_normal(conv2_shape, stddev=0.1),name='W2')
-        B2 = tf.Variable(tf.truncated_normal([36], stddev=0.1),name='B2')
+        B2 = tf.Variable(tf.zeros(36),name='B2')
 
         # Helper function for conv layers
         def conv2d(x,W,strides=[1, 1, 1, 1]):
@@ -189,29 +208,29 @@ class TDLearner(Player):
         h2 = tf.nn.relu(tf.add(conv2d(h1, W2), B2),name='Conv2')
 
         # Create flattened layer
-        h1_shape = h1.get_shape().as_list()[1:]
-        flattened = tf.reshape(h1, [-1, np.prod(h1_shape)], name='Flattened')
+        h2_shape = h2.get_shape().as_list()[1:]
+        flattened = tf.reshape(h2, [-1, np.prod(h2_shape)], name='Flattened')
 
         # Create FC and output variables
         W3 = tf.Variable(tf.truncated_normal([flattened.get_shape().as_list()[1], 128], stddev=0.1),name='W3')
-        B3 = tf.Variable(tf.truncated_normal([128], stddev=0.1),name='B3')
+        B3 = tf.Variable(tf.zeros([128]),name='B3')
         #W4 = tf.Variable(tf.truncated_normal([200, 200], stddev=0.1), name='W4')
         #B4 = tf.Variable(tf.truncated_normal([200], stddev=0.1), name='B3')
         outputW = tf.Variable(tf.truncated_normal([128, output_size], stddev=0.1),name='outputW')
-        outputB = tf.Variable(tf.truncated_normal([output_size], stddev=0.1),name='outputB')
+        outputB = tf.Variable(tf.zeros([output_size]),name='outputB')
 
         # Create FC and output layer
         h3 = tf.nn.relu(tf.add(tf.matmul(flattened, W3), B3),name='FC')
         #h4 = tf.nn.relu(tf.add(tf.matmul(h3,W4), B4), name='FC2')
-        output = tf.add(tf.matmul(h3, outputW), outputB,name='output')
+        output = tf.add(tf.matmul(h3, outputW), outputB, name='output')
         # Assign to output
         self.Q_values = output
 
         # Create update structure
         self.target_Q = tf.placeholder(tf.float32,[None,output_size],'Target')
-        loss = tf.reduce_mean(tf.square(self.target_Q - self.Q_values))
+        self.loss = tf.reduce_mean(tf.square(self.target_Q - self.Q_values))
         self.optimizer = tf.train.AdamOptimizer(self.alpha)
-        self.update_model = self.optimizer.minimize(loss)
+        self.update_model = self.optimizer.minimize(self.loss)
         
         self.saver = tf.train.Saver()
         
