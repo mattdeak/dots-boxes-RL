@@ -41,7 +41,7 @@ def self_play_simulation(environment,train_agent,target_agent,n_games,update_ste
         win_percentage = float(test_winners.count(train_agent.name)) / test_games
         avg_game_length = np.average(game_lengths)
 
-        print("Current win percentage over test agent: {:.2f}%".format(win_percentage * 100))
+        print("Current win percentage over agent {}: {:.2f}%".format(test.name,win_percentage * 100))
         print("Average Game Length: {}".format(avg_game_length))
 
         train.learning = True
@@ -70,11 +70,12 @@ def self_play_simulation(environment,train_agent,target_agent,n_games,update_ste
     try:
         train_agent.load_model('/home/matthew/Programming/Projects/Dots_and_Boxes/models/')
         target_agent.load_model('/home/matthew/Programming/Projects/Dots_and_Boxes/models/')
+        print("Load Succeeded")
     except:
         print("Attempted load and failed")
 
     for game_number in range(1,n_games+1):
-        print(game_number)
+
         environment.player1 = train_agent
         environment.player2 = target_agent
 
@@ -87,6 +88,7 @@ def self_play_simulation(environment,train_agent,target_agent,n_games,update_ste
 
             for agent in test_agents:
                 test(test_env,train_agent,agent,test_games)
+                print()
                 # print("Last Game: ")
                 # for game_state in states[-1]:
                 #     state_string = env.print_state(game_state)
@@ -103,13 +105,14 @@ def self_play_simulation(environment,train_agent,target_agent,n_games,update_ste
             print("Updating Model")
             train_agent.save_model('/home/matthew/Programming/Projects/Dots_and_Boxes/models/',global_step=game_number)
             target_agent.load_model('/home/matthew/Programming/Projects/Dots_and_Boxes/models/')
+            print()
                 
     return game_logs, test_logs
     
 
     
 if __name__ == '__main__':
-    game_size = 4
+    game_size = 3
     train_agent = TDLearner('train',alpha=1e-4)
     print(train_agent.name)
     target_agent = TDLearner('target')
@@ -121,7 +124,7 @@ if __name__ == '__main__':
 
     env = DotsAndBoxes(game_size)
     n_games = 100000000
-    update_step = 1000
+    update_step = 2000
     test_games = 50
     logs, tests = self_play_simulation(env, train_agent, target_agent,
                                        n_games, update_step,

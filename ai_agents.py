@@ -99,56 +99,41 @@ class TDLearner(Player):
         if random.random() < self.epsilon and self.learning:
             chosen_action = np.random.choice(self._environment.valid_actions)
         else:
-            q_values = self.get_Q_values(feature_vector)
+            q_values = self.get_Q_values(feature_vector)[0]
             max_valid_q = q_values[self._environment.valid_actions].max()
             best_actions = np.where(q_values == max_valid_q)[0]
-            chosen_action = random.choice(best_actions)
+            chosen_action = random.choice([action for action in best_actions if action in self._environment.valid_actions])
        
         return chosen_action
 
     def get_Q_values(self, feature_vector):
         """Returns the Q_values of a state"""
-        q_values = self.sess.run(self.Q_values, feed_dict={self.input_matrix: feature_vector})[0]
+        q_values = self.sess.run(self.Q_values, feed_dict={self.input_matrix: feature_vector})
         return q_values
        
     def td_update(self, feature_vector, action, next_feature_vector, reward):
         """Updates the Q_function according to the SARSA update algorithm"""
         # Update the replay table
-        self.replay_table[self.transition_count] = (feature_vector, action, next_feature_vector, reward)
-        self.transition_count = (self.transition_count + 1) % self.replay_size
+        self.replay_table[self.transition_count % self.replay_size] = (feature_vector, action, next_feature_vector, reward)
+        self.transition_count = (self.transition_count + 1)
 
-        if next_feature_vector is None:
-            q_next = np.zeros(len(self.environment.action_list))
-        else:
-            q_next = self.get_Q_values(next_feature_vector)
-
-        # Get uncorrelated mini-batch from episode data once table is filled
-        if self.transition_count > self.update_size:
-            random_tbl = random.choice(self.replay_table[:self.update_size],size=self.update_size)
+        # Don't start learning until transition table has some data
+        if self.transition_count > self.update_size * 20:
+            random_tbl = random.choice(self.replay_table[:min(self.transition_count,self.replay_size)],size=self.update_size)
             feature_vector = np.vstack(random_tbl['state'])
             action = random_tbl['action']
             next_feature_vector = np.vstack(random_tbl['next_state'])
             reward = random_tbl['reward']
+            non_terminal_ix = np.where([~np.any(np.isnan(next_feature_vector),axis=(1,2,3))])[1]
 
-        terminal_ix = np.where(next_feature_vector is None)[0]
-        non_terminal_ix = np.where(next_feature_vector is not None)[0]
-
-        if terminal_ix.size != 0:
-            q_next[terminal_ix] = np.zeros(len(self.environment.action_list))
-
-        if non_terminal_ix.size != 0:
+            q_next = np.zeros([self.update_size,len(self.environment.action_list)])
             q_next[non_terminal_ix] = self.get_Q_values(next_feature_vector[non_terminal_ix])
-        # Generate a target Q value
 
-        target = self.gamma*q_next
-        ## Update only the action we took
-        target[action] += reward
+            target = self.gamma * q_next
+            target[np.arange(len(target)), action] += reward
 
-        # Reshape target to fit target placeholder
-        target = np.reshape(target,[-1,target.size])
-
-        # Update Q model according to target
-        self.sess.run(self.update_model, feed_dict={self.target_Q: target, self.input_matrix: feature_vector})
+            # Update Q model according to target
+            self.sess.run(self.update_model, feed_dict={self.target_Q: target, self.input_matrix: feature_vector})
 
     def save_model(self,checkpoint_name=None, global_step=None):
         """Saves a model and returns the name of the checkpoint"""
@@ -208,11 +193,11 @@ class TDLearner(Player):
         flattened = tf.reshape(h1, [-1, np.prod(h1_shape)], name='Flattened')
 
         # Create FC and output variables
-        W3 = tf.Variable(tf.truncated_normal([flattened.get_shape().as_list()[1], 256], stddev=0.1),name='W3')
-        B3 = tf.Variable(tf.truncated_normal([256], stddev=0.1),name='B3')
+        W3 = tf.Variable(tf.truncated_normal([flattened.get_shape().as_list()[1], 128], stddev=0.1),name='W3')
+        B3 = tf.Variable(tf.truncated_normal([128], stddev=0.1),name='B3')
         #W4 = tf.Variable(tf.truncated_normal([200, 200], stddev=0.1), name='W4')
         #B4 = tf.Variable(tf.truncated_normal([200], stddev=0.1), name='B3')
-        outputW = tf.Variable(tf.truncated_normal([256, output_size], stddev=0.1),name='outputW')
+        outputW = tf.Variable(tf.truncated_normal([128, output_size], stddev=0.1),name='outputW')
         outputB = tf.Variable(tf.truncated_normal([output_size], stddev=0.1),name='outputB')
 
         # Create FC and output layer
