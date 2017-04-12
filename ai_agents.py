@@ -288,6 +288,8 @@ class TDLearner(Player):
         
         # Initialize all variables
         init = tf.global_variables_initializer()
+
+        # Run variable initialization
         self.sess.run(init)
         
 
