@@ -113,13 +113,11 @@ def self_play_simulation(environment,train_agent,target_agent,n_games,update_ste
                 
     return game_logs, test_logs
     
-
-    
 if __name__ == '__main__':
     game_size = 3
     train_agent = TDLearner('train',alpha=1e-4,gamma=0.6)
 
-    target_agent = SimplePlayer('naive')
+    target_agent = TDLearner('naive')
     target_agent.learning = False
 
 
@@ -127,9 +125,9 @@ if __name__ == '__main__':
     test_agent2 = SimplePlayer('test_2')
     
     env = DotsAndBoxes(game_size)
-    n_games = 100000
-    update_step = 1000
-    test_games = 100
+    n_games = 1000
+    update_step = 300
+    test_games = 50
     
     logs, tests = self_play_simulation(env, train_agent, target_agent,
                                        n_games, update_step,

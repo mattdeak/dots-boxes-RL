@@ -75,34 +75,52 @@ class TDLearner(Player):
         """Chooses an action according to the DQN and performs a TD update if possible
         """
         state = self._environment.state
-        feature_vector = self.generate_input_vector(state)
-
-        #TD-Update with 0
-        if self.last_state is not None and self.learning:
-            self.td_update(self.last_state, self.last_action, feature_vector, 0)
+        # Generate a feature vector
+        feature_vector = self.generate_input_vector(state, True)
         
-        # Choose an action
+         # Choose an action
         action = self.choose_action(feature_vector)
         
-        self.last_state = feature_vector.copy()
-        self.last_action = action
+        reward, next_state = self._environment.step(action)
         
-        self._environment.step(action)
+        if self.learning:
+            my_turn_next = self._environment.current_player == self
+            
+            if next_state is not None:
+                next_feature_vector = self.generate_input_vector(state,my_turn_next)
+            else:
+                next_feature_vector = None
+    
+            # TD-Update with 0
+            self.td_update(feature_vector, action, next_feature_vector, reward)
         
         return action
+        
+    def observe(self,previous_state, action, reward):
+        """Observes the action that the opponent took"""
+        
+        if self.learning:
+            feature_vector = self.generate_input_vector(previous_state,False)
+            
+            my_turn_next = self._environment.current_player == self
+            
+            if self._environment.state is not None:
+                next_feature_vector = self.generate_input_vector(self._environment.state,my_turn_next)
+            else:
+                next_feature_vector = None
+            
+            self.td_update(feature_vector, action, next_feature_vector, reward)
 
 
-    def generate_input_vector(self, state):
+    def generate_input_vector(self, state, my_turn):
         """Generates an input vector based on an environment state."""
+        is_my_turn = int(my_turn)
         r, c, d = state.shape
-        input_vector = np.reshape(state, [1, r, c, d])
+        input_vector = np.resize(state, [1, r, c, d + 1])
+        input_vector[:,:,:,-1] = is_my_turn
+        
         return input_vector
 
-    def receive_reward(self, reward):
-        """Performs a TD Update with the given reward and resets last state"""
-        if self.learning:
-            self.td_update(self.last_state, self.last_action, None, reward)
-            self.last_state = None
             
     def choose_action(self, feature_vector):
         """Chooses an action based on an epsilon-greedy SARSA policy"""
@@ -131,6 +149,7 @@ class TDLearner(Player):
         # Don't start learning until transition table has some data
         if self.transition_count >= self.update_size * 20:
             if self.transition_count == self.update_size * 20:
+                print (self.name)
                 print("Replay Table is Ready\n")
             
             # Get a random subsection of the replay table for mini-batch update
@@ -197,9 +216,9 @@ class TDLearner(Player):
         # Sets up the replay table for the DQN
         r,c,d = self._environment.state.shape
         self.replay_table = np.rec.array(np.zeros(self.replay_size, 
-                                                  dtype=[('state','(1,{},{},{})float32'.format(r,c,d)),
+                                                  dtype=[('state','(1,{},{},{})float32'.format(r,c,d+1)),
                                                               ('action', 'int8'),
-                                                              ('next_state', '(1,{},{},{})float32'.format(r,c,d)),
+                                                              ('next_state', '(1,{},{},{})float32'.format(r,c,d+1)),
                                                               ('reward','float32')]))
     
         tf.reset_default_graph()
@@ -207,14 +226,14 @@ class TDLearner(Player):
         
         # Set relevent parameters
         output_size = len(self._environment.action_list)
-        conv1_shape = [3, 3, 4, 16]
+        conv1_shape = [3, 3, 5, 16]
         conv2_shape = [1, 1, conv1_shape[-1], 32]
         fc_size = 256
         keep_prob = 0.5
         
         # Input placeholder
         row, column, depth = self._environment.state.shape
-        self.input_matrix = tf.placeholder(tf.float32, [None, row, column, depth],name='X')
+        self.input_matrix = tf.placeholder(tf.float32, [None, r, c, d + 1],name='X')
 
         # Set up weights and biases for convolutional layers
         W1 = tf.Variable(tf.truncated_normal(conv1_shape, stddev=0.1),name='W1')

@@ -23,6 +23,7 @@ class DotsAndBoxes():
         self._player1 = None
         self._player2 = None
         self.current_player = self._player1
+        self.other_player = self._player2
         self.score = defaultdict(int)
         self.action_list = range(size * (size + 1) * 2)
         self.valid_actions = None
@@ -58,33 +59,27 @@ class DotsAndBoxes():
         self._player2 = agent
         if self._player2.name is None:
             self._player2.name = "Player 2"
+        self.other_player = self._player2
         
     def switch_turn(self):
         """Switches the turn"""
         if self.current_player == self._player1:
             self.current_player = self._player2
+            self.other_player = self._player1
         else:
             self.current_player = self._player1
+            self.other_player = self._player2
             
-    def payout(self):
-        """Updates the player rewards"""
-        if self.score[self._player1] < self.score[self._player2]:
-            self._player1.receive_reward(self.reward_dictionary['loss'])
-            self._player2.receive_reward(self.reward_dictionary['win'])
-        elif self.score[self._player1] == self.score[self._player2]:
-            self._player1.receive_reward(self.reward_dictionary['draw'])
-            self._player2.receive_reward(self.reward_dictionary['draw'])
-        else:
-            self._player1.receive_reward(self.reward_dictionary['win'])
-            self._player2.receive_reward(self.reward_dictionary['loss'])
+
             
     def end_game(self):
-        """Ends the Game"""
-        self.state = None
-        if self.exit_code is None:
-            self.payout()
+        """Returns final rewards"""
+        if self.score[self.current_player] > self.score[self.other_player]:
+            return self.reward_dictionary['win']
+        elif self.score[self.current_player] == self.score[self.other_player]:
+            return self.reward_dictionary['draw']
         else:
-            self.current_player.receive_reward(self.reward_dictionary[self.exit_code])
+            return self.reward_dictionary['loss']
         
     
     
@@ -102,25 +97,37 @@ class DotsAndBoxes():
             # If the agent is not learning, just choose a random action
             if not self.is_valid_action(action):
                 action = random.choice(self.valid_actions)
+            
+            last_state = np.copy(self.state)
+                
             # Add a wall where the action dictates
             self.build_wall(action)
             
             # Determine the score of the action
             scored = self.score_action(action)
             # Remove the action from the list of valid actions
-            self.valid_actions.remove(action)            
+            self.valid_actions.remove(action)
+            
+            # Payout rewards
+            reward = 0
             if self.valid_actions == []:
-                self.end_game()
+                self.state = None
+                reward = self.end_game()
+                self.other_player.observe(last_state,action,-reward)
             else:
+                self.other_player.observe(last_state,action,0)
+                
                 if not scored:
                     self.switch_turn()
+                    
+            return reward, self.state
+                
         
     
     def score_action(self,action):
         """Scores the action and returns whether"""
         states = self.convert_to_state(action)
         scored = False
-        
         for state_index in states:
             cell_row,cell_column = state_index[:2]
             if np.sum(self.state[cell_row,cell_column]) == 4:
@@ -128,7 +135,16 @@ class DotsAndBoxes():
                 self.score[self.current_player] += 1
                 scored = True
                 
-        return scored
+        return scored  
+        
+    def is_scoring_action(self,action):
+        """Determines if the action 'would' score if it was played"""
+        states = self.convert_to_state(action)
+        for state_index in states:
+            cell_row,cell_column,side = state_index[:2]
+            if np.sum(s for s in self.state[cell_row,cell_column] if s != side) == 3:
+                return True
+        return False
 
     def play(self, log=False, pause=None):
         """Plays a game"""
@@ -178,9 +194,6 @@ class DotsAndBoxes():
         self.exit_code = None
         self.state = np.zeros([self.size,self.size,4])
         
-    
-    def reward_payout(self):
-        self._player1.receive_reward()
         
     def build_wall(self,action):
         """Builds a wall in the game state"""
@@ -337,12 +350,6 @@ class DotsAndBoxes():
 
         return string
                     
-                        
-        
-        
-            
-            
-            
                 
 if __name__ == '__main__':
     db = DotsAndBoxes(3)

@@ -42,7 +42,7 @@ class Player:
         self._environment.step(action)
         return action
         
-    def receive_reward(self,reward):
+    def observe(self,last_state,action,reward):
         """Random player does nothing"""
         
     def choose_action(self):
