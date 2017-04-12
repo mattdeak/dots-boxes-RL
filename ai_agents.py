@@ -54,6 +54,9 @@ class TDLearner(Player):
         self.target_Q = None
         self.optimizer = None
         self.update_model = None
+        
+        #Logging
+        self.log_file = None
 
     @property
     def environment(self):
@@ -101,11 +104,12 @@ class TDLearner(Player):
         if random.random() < self.epsilon and self.learning:
             chosen_action = np.random.choice(self._environment.valid_actions)
         else:
-            q_values = self.get_Q_values(feature_vector)[0]
-            max_valid_q = q_values[self._environment.valid_actions].max()
-            best_actions = np.where(q_values == max_valid_q)[0]
-            chosen_action = random.choice([action for action in best_actions if action in self._environment.valid_actions])
-       
+            with open('Q_log.txt','w+') as file:
+                q_values = self.get_Q_values(feature_vector)[0]
+                print ("Q: {}".format(q_values),file=file)
+                max_valid_q = q_values[self._environment.valid_actions].max()
+                best_actions = np.where(q_values == max_valid_q)[0]
+                chosen_action = random.choice([action for action in best_actions if action in self._environment.valid_actions])
         return chosen_action
 
     def get_Q_values(self, feature_vector):
@@ -144,13 +148,20 @@ class TDLearner(Player):
             # Only actions that have been taken should be updated with the reward
             target[np.arange(len(target)), actions] += (rewards + self.gamma*q_next.max(axis=1))
             
-            #print(q_current)
-            
-            # Update Q model according to target
-#==============================================================================
-#             print("Update: {}".format(target - q_current))
-#             print("Actions: {}".format(action))
-#==============================================================================
+            # Logging
+            if self.log_file is not None:
+                print ("Current Q Value: {}".format(q_current),file=self.log_file)
+                print ("Next Q Value: {}".format(q_next),file=self.log_file)
+                print ("Current Rewards: {}".format(rewards),file=self.log_file)
+                print ("Actions: {}".format(actions),file=self.log_file)
+                print ("Targets: {}".format(target),file=self.log_file)
+                
+                # Log the gradients to check for vanishing gradient or explosion
+                loss, output_grad, conv_grad = self.sess.run([self.loss,self.output_gradient,self.convolutional_gradient],
+                                                             feed_dict={self.target_Q: target, self.input_matrix: feature_vectors})
+                print ("Loss: {}".format(loss),file=self.log_file)
+                print ("Output Weight Gradient: {}".format(output_grad),file=self.log_file)
+                print ("Convolutional Gradient: {}".format(conv_grad),file=self.log_file)
             
             self.sess.run(self.update_model, feed_dict={self.target_Q: target, self.input_matrix: feature_vectors})
 
@@ -190,14 +201,16 @@ class TDLearner(Player):
         row, column, depth = self._environment.state.shape
         self.input_matrix = tf.placeholder(tf.float32, [None, row, column, depth],name='X')
         output_size = len(self._environment.action_list)
-        conv1_shape = [3, 3, 4, 12]
-        conv2_shape = [2, 2, 12, 36]
+        conv1_shape = [3, 3, 4, 16]
+        conv2_shape = [1, 1, conv1_shape[-1], 32]
+        fc_size = 256
+        keep_prob = 0.5
 
         # Set up weights and biases for convolutional layers
         W1 = tf.Variable(tf.truncated_normal(conv1_shape, stddev=0.1),name='W1')
-        B1 = tf.Variable(tf.zeros(12),name='B1')
+        B1 = tf.Variable(tf.zeros(conv1_shape[-1]),name='B1')
         W2 = tf.Variable(tf.truncated_normal(conv2_shape, stddev=0.1),name='W2')
-        B2 = tf.Variable(tf.zeros(36),name='B2')
+        B2 = tf.Variable(tf.zeros([conv2_shape[-1]]),name='B2')
 
         # Helper function for conv layers
         def conv2d(x,W,strides=[1, 1, 1, 1]):
@@ -212,39 +225,51 @@ class TDLearner(Player):
         flattened = tf.reshape(h2, [-1, np.prod(h2_shape)], name='Flattened')
 
         # Create FC and output variables
-        W3 = tf.Variable(tf.truncated_normal([flattened.get_shape().as_list()[1], 128], stddev=0.1),name='W3')
-        B3 = tf.Variable(tf.zeros([128]),name='B3')
-        #W4 = tf.Variable(tf.truncated_normal([200, 200], stddev=0.1), name='W4')
-        #B4 = tf.Variable(tf.truncated_normal([200], stddev=0.1), name='B3')
-        outputW = tf.Variable(tf.truncated_normal([128, output_size], stddev=0.1),name='outputW')
+        W3 = tf.Variable(tf.truncated_normal([flattened.get_shape().as_list()[1], fc_size], stddev=0.1),name='W3')
+        B3 = tf.Variable(tf.zeros([fc_size]),name='B3')
+        W4 = tf.Variable(tf.truncated_normal([fc_size, fc_size], stddev=0.1), name='W4')
+        B4 = tf.Variable(tf.zeros([fc_size]), name='B4')
+        outputW = tf.Variable(tf.truncated_normal([fc_size, output_size], stddev=0.1),name='outputW')
         outputB = tf.Variable(tf.zeros([output_size]),name='outputB')
 
         # Create FC and output layer
         h3 = tf.nn.relu(tf.add(tf.matmul(flattened, W3), B3),name='FC')
-        #h4 = tf.nn.relu(tf.add(tf.matmul(h3,W4), B4), name='FC2')
-        output = tf.add(tf.matmul(h3, outputW), outputB, name='output')
+        h4 = tf.nn.dropout(tf.nn.relu(tf.add(tf.matmul(h3,W4), B4)), name='FC2',keep_prob=keep_prob)
+        output = tf.add(tf.matmul(h4, outputW), outputB, name='output')
         # Assign to output
         self.Q_values = output
 
         # Create update structure
         self.target_Q = tf.placeholder(tf.float32,[None,output_size],'Target')
         self.loss = tf.reduce_mean(tf.square(self.target_Q - self.Q_values))
-        self.optimizer = tf.train.AdamOptimizer(self.alpha)
-        self.update_model = self.optimizer.minimize(self.loss)
+        self.optimizer = tf.train.RMSPropOptimizer(self.alpha)
         
+         # Clip gradients to prevent explosion
+        gradients = self.optimizer.compute_gradients(self.loss)
+        clipped_gradients = [(tf.clip_by_value(grad,-1.,1.), var) for grad, var in gradients]
+        self.update_model = self.optimizer.apply_gradients(clipped_gradients)
+        
+        # For saving and loading models
         self.saver = tf.train.Saver()
+        
+        # For Logging Purposes:
+        self.output_gradient = self.optimizer.compute_gradients(self.loss, [outputW])
+        self.convolutional_gradient = self.optimizer.compute_gradients(self.loss, [W1])
         
         # Initialize all variables
         init = tf.global_variables_initializer()
         self.sess.run(init)
         
-        
-
-
 
 if __name__ == '__main__':
-    s = TDLearner()
-
+    s = TDLearner('train')
+    s2 = TDLearner('test')
+    s2.learning = False
+    
+    env = DotsAndBoxes()
+    env.player1 = s
+    env.player2 = s2
+    env.play()
         
         
         
