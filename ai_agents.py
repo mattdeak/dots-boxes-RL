@@ -113,16 +113,15 @@ class TDLearner(Player):
 
             
     def choose_action(self, feature_vector):
-        """Chooses an action based on an epsilon-greedy SARSA policy"""
+        """Chooses an action based on an epsilon-greedy policy"""
         if random.random() < self.epsilon and self.learning:
             chosen_action = np.random.choice(self._environment.valid_actions)
         else:
-            with open('Q_log.txt','w') as file:
-                q_values = self.get_Q_values(feature_vector)[0]
-                #print ("Q: {}".format(q_values))
-                max_valid_q = q_values[self._environment.valid_actions].max()
-                best_actions = np.where(q_values == max_valid_q)[0]
-                chosen_action = random.choice([action for action in best_actions if action in self._environment.valid_actions])
+            q_values = self.get_Q_values(feature_vector)[0]
+            #print ("Q: {}".format(q_values))
+            max_valid_q = q_values[self._environment.valid_actions].max()
+            best_actions = np.where(q_values == max_valid_q)[0]
+            chosen_action = random.choice([action for action in best_actions if action in self._environment.valid_actions])
         return chosen_action
 
     def get_Q_values(self, feature_vector):
@@ -262,7 +261,7 @@ class TDLearner(Player):
         # Create FC and output layer
         h3 = tf.nn.elu(tf.add(tf.matmul(flattened, W3), B3),name='FC')
         h4 = tf.nn.elu(tf.add(tf.matmul(h3,W4), B4), name='FC2')
-        output = tf.add(tf.matmul(h4, outputW), outputB, name='output')
+        output = tf.nn.tanh(tf.add(tf.matmul(h4, outputW), outputB), name='output')
         
         # Q values are represented by the output tensor
         self.Q_values = output
