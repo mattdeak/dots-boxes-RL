@@ -72,8 +72,8 @@ def self_play_simulation(environment,train_agent,target_agent,n_games,update_ste
     environment.player2 = target_agent
 
     try:
-        train_agent.load_model('/home/matthew/Programming/Projects/Dots_and_Boxes/models')
-        target_agent.load_model('/home/matthew/Programming/Projects/Dots_and_Boxes/models')
+        train_agent.load_model('/home/matthew/Programming/Projects/Dots_and_Boxes/models/size{}/'.format(env.size))
+        target_agent.load_model('/home/matthew/Programming/Projects/Dots_and_Boxes/models/size{}/'.format(env.size))
         print("Load Succeeded")
     except:
         print("Attempted load and failed")
@@ -107,17 +107,17 @@ def self_play_simulation(environment,train_agent,target_agent,n_games,update_ste
 
             #Give the target agent the most recent model
             print("Saving current model")
-            train_agent.save_model('/home/matthew/Programming/Projects/Dots_and_Boxes/models', global_step=game_number)
+            train_agent.save_model('/home/matthew/Programming/Projects/Dots_and_Boxes/models/size{}/'.format(env.size), global_step=game_number)
 
             print("Loading model into target")
-            target_agent.load_model('/home/matthew/Programming/Projects/Dots_and_Boxes/models')
+            target_agent.load_model('/home/matthew/Programming/Projects/Dots_and_Boxes/models/size{}/'.format(env.size))
             
                 
     return game_logs, test_logs
     
 if __name__ == '__main__':
     game_size = 3
-    train_agent = TDLearner('train',alpha=1e-4,gamma=0.6)
+    train_agent = TDLearner('train',alpha=1e-5,gamma=0.6)
 
     target_agent = TDLearner('target')
     target_agent.learning = False
@@ -127,9 +127,9 @@ if __name__ == '__main__':
     test_agent2 = SimplePlayer('test_2')
     
     env = DotsAndBoxes(game_size)
-    n_games = 100000
-    update_step = 50
-    test_games = 100
+    n_games = 500000
+    update_step = 2000
+    test_games = 500
     
     logs, tests = self_play_simulation(env, train_agent, target_agent,
                                        n_games, update_step,

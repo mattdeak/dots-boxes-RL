@@ -12,7 +12,7 @@ from dots_and_boxes import DotsAndBoxes
 
 class TDLearner(Player):
     """DQN"""    
-    def __init__(self, name, alpha=0.01, epsilon=0.05, gamma=0.95,lmbda=1, d_size=10000, update_size=50):
+    def __init__(self, name, alpha=1e-4, epsilon=0.1, gamma=0.95,lmbda=1, d_size=20000, update_size=100):
         """Initializes the SARSA agent.
         Attributes:
             weights: weights used by the linear function approximator. One weight matrix per action.
@@ -50,6 +50,7 @@ class TDLearner(Player):
         self.update_model = None
         self.output_gradient = None
         self.convolutional_gradient = None
+        self.keep_prob = None
         
         # For TD-Update
         self.last_state = None
@@ -87,7 +88,7 @@ class TDLearner(Player):
             my_turn_next = self._environment.current_player == self
             
             if next_state is not None:
-                next_feature_vector = self.generate_input_vector(state,my_turn_next)
+                next_feature_vector = self.generate_input_vector(state, my_turn_next)
             else:
                 next_feature_vector = None
     
@@ -96,7 +97,7 @@ class TDLearner(Player):
         
         return action
         
-    def observe(self,previous_state, action, reward):
+    def observe(self, previous_state, action, reward):
         """Observes the action that the opponent took"""
         
         if self.learning:
@@ -127,9 +128,9 @@ class TDLearner(Player):
         if random.random() < self.epsilon and self.learning:
             chosen_action = np.random.choice(self._environment.valid_actions)
         else:
-            with open('Q_log.txt','w+') as file:
+            with open('Q_log.txt','w') as file:
                 q_values = self.get_Q_values(feature_vector)[0]
-                print ("Q: {}".format(q_values), file=file)
+                print ("Q: {}".format(q_values))
                 max_valid_q = q_values[self._environment.valid_actions].max()
                 best_actions = np.where(q_values == max_valid_q)[0]
                 chosen_action = random.choice([action for action in best_actions if action in self._environment.valid_actions])
@@ -229,8 +230,7 @@ class TDLearner(Player):
         conv1_shape = [3, 3, 5, 16]
         conv2_shape = [1, 1, conv1_shape[-1], 32]
         fc_size = 256
-        keep_prob = 0.5
-        
+
         # Input placeholder
         row, column, depth = self._environment.state.shape
         self.input_matrix = tf.placeholder(tf.float32, [None, r, c, d + 1],name='X')
@@ -263,7 +263,7 @@ class TDLearner(Player):
 
         # Create FC and output layer
         h3 = tf.nn.relu(tf.add(tf.matmul(flattened, W3), B3),name='FC')
-        h4 = tf.nn.dropout(tf.nn.relu(tf.add(tf.matmul(h3,W4), B4)), name='FC2',keep_prob=keep_prob)
+        h4 = tf.nn.relu(tf.add(tf.matmul(h3,W4), B4), name='FC2')
         output = tf.add(tf.matmul(h4, outputW), outputB, name='output')
         
         # Q values are represented by the output tensor
