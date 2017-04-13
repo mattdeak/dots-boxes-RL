@@ -72,8 +72,8 @@ def self_play_simulation(environment,train_agent,target_agent,n_games,update_ste
     environment.player2 = target_agent
 
     try:
-        train_agent.load_model('/home/matthew/Programming/Projects/Dots_and_Boxes/models/size{}/'.format(env.size))
-        target_agent.load_model('/home/matthew/Programming/Projects/Dots_and_Boxes/models/size{}/'.format(env.size))
+        train_agent.load_model('C:\\users\\deakma\\Dots-Boxes-RL\\models\\')
+        target_agent.load_model('C:\\users\\deakma\\Dots-Boxes-RL\\models\\')
         print("Load Succeeded")
     except:
         print("Attempted load and failed")
@@ -107,17 +107,17 @@ def self_play_simulation(environment,train_agent,target_agent,n_games,update_ste
 
             #Give the target agent the most recent model
             print("Saving current model")
-            train_agent.save_model('/home/matthew/Programming/Projects/Dots_and_Boxes/models/size{}/'.format(env.size), global_step=game_number)
+            train_agent.save_model('C:\\users\\deakma\\Dots-Boxes-RL\\models\\'.format(env.size))
 
             print("Loading model into target")
-            target_agent.load_model('/home/matthew/Programming/Projects/Dots_and_Boxes/models/size{}/'.format(env.size))
+            target_agent.load_model('C:\\users\\deakma\\Dots-Boxes-RL\\models\\'.format(env.size))
             
                 
     return game_logs, test_logs
     
 if __name__ == '__main__':
     game_size = 3
-    train_agent = TDLearner('train',alpha=1e-5,gamma=0.6)
+    train_agent = TDLearner('train',alpha=1e-6,gamma=0.6)
 
     target_agent = TDLearner('target')
     target_agent.learning = False
@@ -128,8 +128,8 @@ if __name__ == '__main__':
     
     env = DotsAndBoxes(game_size)
     n_games = 500000
-    update_step = 2000
-    test_games = 500
+    update_step = 1000
+    test_games = 100
     
     logs, tests = self_play_simulation(env, train_agent, target_agent,
                                        n_games, update_step,

@@ -38,6 +38,7 @@ class TDLearner(Player):
         self.replay_table = None
         self.replay_size = d_size
         self.update_size = update_size
+        self.last_state = None
 
         # Variables needed for Q function interaction
         self.sess = None
@@ -77,48 +78,36 @@ class TDLearner(Player):
         """
         state = self._environment.state
         # Generate a feature vector
-        feature_vector = self.generate_input_vector(state, True)
+        feature_vector = self.generate_input_vector(state)
         
          # Choose an action
         action = self.choose_action(feature_vector)
         
-        reward, next_state = self._environment.step(action)
+        self.last_state = feature_vector.copy()
+        self.last_action = action
         
-        if self.learning:
-            my_turn_next = self._environment.current_player == self
-            
-            if next_state is not None:
-                next_feature_vector = self.generate_input_vector(state, my_turn_next)
-            else:
-                next_feature_vector = None
-    
-            # TD-Update with 0
-            self.td_update(feature_vector, action, next_feature_vector, reward)
+        self._environment.step(action)
         
         return action
         
-    def observe(self, previous_state, action, reward):
+    def observe(self, state, reward):
         """Observes the action that the opponent took"""
         
         if self.learning:
-            feature_vector = self.generate_input_vector(previous_state,False)
-            
-            my_turn_next = self._environment.current_player == self
-            
+            have_next_turn = int(self._environment.current_player == self)
+    
             if self._environment.state is not None:
-                next_feature_vector = self.generate_input_vector(self._environment.state,my_turn_next)
+                next_feature_vector = self.generate_input_vector(state)
             else:
                 next_feature_vector = None
             
-            self.td_update(feature_vector, action, next_feature_vector, reward)
+            self.td_update(self.last_state, self.last_action, next_feature_vector, reward, have_next_turn)
 
 
-    def generate_input_vector(self, state, my_turn):
+    def generate_input_vector(self, state):
         """Generates an input vector based on an environment state."""
-        is_my_turn = int(my_turn)
         r, c, d = state.shape
-        input_vector = np.resize(state, [1, r, c, d + 1])
-        input_vector[:,:,:,-1] = is_my_turn
+        input_vector = np.resize(state, [1, r, c, d])
         
         return input_vector
 
@@ -130,7 +119,7 @@ class TDLearner(Player):
         else:
             with open('Q_log.txt','w') as file:
                 q_values = self.get_Q_values(feature_vector)[0]
-                print ("Q: {}".format(q_values))
+                #print ("Q: {}".format(q_values))
                 max_valid_q = q_values[self._environment.valid_actions].max()
                 best_actions = np.where(q_values == max_valid_q)[0]
                 chosen_action = random.choice([action for action in best_actions if action in self._environment.valid_actions])
@@ -141,10 +130,12 @@ class TDLearner(Player):
         q_values = self.sess.run(self.Q_values, feed_dict={self.input_matrix: feature_vector})
         return q_values
        
-    def td_update(self, current_state, last_action, next_state, reward):
-        """Updates the Q_function according to the SARSA update algorithm"""
+    def td_update(self, current_state, last_action, next_state, reward, have_next_turn):
+        """Updates the Q_function according to the TD update algorithm"""
+        #print("Previous: {}\nAction: {}\nNext: {}\nNext:{}".format(current_state,last_action,next_state,have_next_turn))
+        
         # Update the replay table
-        self.replay_table[self.transition_count % self.replay_size] = (current_state, last_action, next_state, reward)
+        self.replay_table[self.transition_count % self.replay_size] = (current_state, last_action, next_state, reward, have_next_turn)
         self.transition_count = (self.transition_count + 1)
 
         # Don't start learning until transition table has some data
@@ -159,9 +150,11 @@ class TDLearner(Player):
             actions = random_tbl['action']
             next_feature_vectors = np.vstack(random_tbl['next_state'])
             rewards = random_tbl['reward']
+            next_turn_vector = random_tbl['had_next_turn']
             
             # Get the indices of the non-terminal states
             non_terminal_ix = np.where([~np.any(np.isnan(next_feature_vectors),axis=(1,2,3))])[1]
+            next_turn_vector[next_turn_vector == 0] = -1
                                        
             q_current = self.get_Q_values(feature_vectors)
             # Default q_next will be all zeros (this encompasses terminal states)
@@ -175,7 +168,10 @@ class TDLearner(Player):
             # This means that the target - q_current will be [0 0 0 0 0 0 x 0 0....] 
             # so the gradient update will only be applied to the action taken
             # for a given feature vector.
-            target[np.arange(len(target)), actions] += (rewards + self.gamma*q_next.max(axis=1))
+            # The next turn vector controls for a conditional minimax. If the opponents turn is next,
+            # The value of the next state is actually the negative maximum across all actions. If our turn is next,
+            # The value is the maximum. 
+            target[np.arange(len(target)), actions] += (rewards + self.gamma*next_turn_vector*q_next.max(axis=1))
             
             # Logging
             if self.log_file is not None:
@@ -195,9 +191,9 @@ class TDLearner(Player):
             # Update the model
             self.sess.run(self.update_model, feed_dict={self.target_Q: target, self.input_matrix: feature_vectors})
 
-    def save_model(self,checkpoint_name=None, global_step=None):
+    def save_model(self,checkpoint_name=None):
         """Saves a model and returns the name of the checkpoint"""
-        self.saver.save(self.sess, checkpoint_name, global_step=global_step)
+        self.saver.save(self.sess, checkpoint_name)
 
     def load_model(self,model_dir):
         """Restores a model from checkpoint"""
@@ -217,23 +213,25 @@ class TDLearner(Player):
         # Sets up the replay table for the DQN
         r,c,d = self._environment.state.shape
         self.replay_table = np.rec.array(np.zeros(self.replay_size, 
-                                                  dtype=[('state','(1,{},{},{})float32'.format(r,c,d+1)),
+                                                  dtype=[('state','(1,{},{},{})float32'.format(r,c,d)),
                                                               ('action', 'int8'),
-                                                              ('next_state', '(1,{},{},{})float32'.format(r,c,d+1)),
-                                                              ('reward','float32')]))
+                                                              ('next_state', '(1,{},{},{})float32'.format(r,c,d)),
+                                                              ('reward','float32'),
+                                                              ('had_next_turn','int8')]))
     
+        # Set up the graph
         tf.reset_default_graph()
         self.sess = tf.Session()
         
         # Set relevent parameters
         output_size = len(self._environment.action_list)
-        conv1_shape = [3, 3, 5, 16]
+        conv1_shape = [3, 3, 4, 16]
         conv2_shape = [1, 1, conv1_shape[-1], 32]
         fc_size = 256
 
         # Input placeholder
         row, column, depth = self._environment.state.shape
-        self.input_matrix = tf.placeholder(tf.float32, [None, r, c, d + 1],name='X')
+        self.input_matrix = tf.placeholder(tf.float32, [None, r, c, d],name='X')
 
         # Set up weights and biases for convolutional layers
         W1 = tf.Variable(tf.truncated_normal(conv1_shape, stddev=0.1),name='W1')
@@ -246,8 +244,8 @@ class TDLearner(Player):
             return tf.nn.conv2d(x, W, strides=strides, padding='SAME')
         
         # Create convolutional layers
-        h1 = tf.nn.relu(tf.add(conv2d(self.input_matrix, W1, strides=[1, 1, 1, 1]), B1),name='Conv1')
-        h2 = tf.nn.relu(tf.add(conv2d(h1, W2), B2),name='Conv2')
+        h1 = tf.nn.elu(tf.add(conv2d(self.input_matrix, W1, strides=[1, 1, 1, 1]), B1),name='Conv1')
+        h2 = tf.nn.elu(tf.add(conv2d(h1, W2), B2),name='Conv2')
 
         # Create flattened layer
         h2_shape = h2.get_shape().as_list()[1:]
@@ -262,8 +260,8 @@ class TDLearner(Player):
         outputB = tf.Variable(tf.zeros([output_size]),name='outputB')
 
         # Create FC and output layer
-        h3 = tf.nn.relu(tf.add(tf.matmul(flattened, W3), B3),name='FC')
-        h4 = tf.nn.relu(tf.add(tf.matmul(h3,W4), B4), name='FC2')
+        h3 = tf.nn.elu(tf.add(tf.matmul(flattened, W3), B3),name='FC')
+        h4 = tf.nn.elu(tf.add(tf.matmul(h3,W4), B4), name='FC2')
         output = tf.add(tf.matmul(h4, outputW), outputB, name='output')
         
         # Q values are represented by the output tensor
@@ -288,8 +286,6 @@ class TDLearner(Player):
         
         # Initialize all variables
         init = tf.global_variables_initializer()
-
-        # Run variable initialization
         self.sess.run(init)
         
 

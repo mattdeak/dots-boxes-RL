@@ -111,16 +111,17 @@ class DotsAndBoxes():
             # Payout rewards
             reward = 0
             if self.valid_actions == []:
-                self.state = None
                 reward = self.end_game()
-                self.other_player.observe(last_state,action,-reward)
-            else:
-                self.other_player.observe(last_state,action,0)
+                self.state = None
+                self.other_player.observe(self.state, -reward)
+                self.current_player.observe(self.state, reward)
                 
+            else:
                 if not scored:
+                    self.other_player.observe(last_state, reward)
                     self.switch_turn()
-                    
-            return reward, self.state
+                else:
+                    self.current_player.observe(self.state, reward)
                 
         
     
