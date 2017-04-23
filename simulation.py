@@ -71,9 +71,11 @@ def self_play_simulation(environment,train_agent,target_agent,n_games,update_ste
     environment.player1 = train_agent
     environment.player2 = target_agent
 
+    model_dir = '/home/matthew/Programming/Projects/Dots_and_Boxes/models/size{}/'.format(env.size)
+
     try:
-        train_agent.load_model('/home/matthew/Programming/Projects/Dots_and_Boxes/models/size{}/'.format(env.size))
-        #target_agent.load_model('/home/matthew/Programming/Projects/Dots_and_Boxes/models/size{}/'.format(env.size))
+        train_agent.load_model(model_dir)
+        target_agent.load_model(model_dir)
         print("Load Succeeded")
     except:
         print("Attempted load and failed")
@@ -93,21 +95,14 @@ def self_play_simulation(environment,train_agent,target_agent,n_games,update_ste
             for agent in test_agents:
                 test(test_env,train_agent,agent,test_games)
                 print()
-                # print("Last Game: ")
-                # for game_state in states[-1]:
-                #     state_string = env.print_state(game_state)
-                #     print("\n",state_string)
-                #     input_v = train_agent.generate_input_vector(game_state)
-                #     print("Q_Values")
-                #     q_vals = train_agent.get_Q_values(input_v)
-                #     for i in range(q_vals.size):
-                #         print("Action {}, {}".format(i,q_vals[i]),end=" ")
-                #         if i % 7 == 0:
-                #             print()
 
             #Give the target agent the most recent model
             print("Saving current model")
-            train_agent.save_model('/home/matthew/Programming/Projects/Dots_and_Boxes/models/size{}/'.format(env.size))
+            train_agent.save_model(model_dir)
+
+            #Load model into target
+            print ("Loading model into target")
+            target_agent.load_model(model_dir)
             
                 
     return game_logs, test_logs
@@ -116,7 +111,7 @@ if __name__ == '__main__':
     game_size = 4
     train_agent = TDLearner('train',alpha=1e-6,gamma=0.6)
 
-    target_agent = Player('target')
+    target_agent = TDLearner('target')
     target_agent.learning = False
 
 
