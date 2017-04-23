@@ -261,7 +261,7 @@ class TDLearner(Player):
         # Create FC and output layer
         h3 = tf.nn.elu(tf.add(tf.matmul(flattened, W3), B3),name='FC')
         h4 = tf.nn.elu(tf.add(tf.matmul(h3,W4), B4), name='FC2')
-        output = tf.nn.tanh(tf.add(tf.matmul(h4, outputW), outputB), name='output')
+        output = tf.tanh(tf.add(tf.matmul(h4, outputW), outputB), name='output')
         
         # Q values are represented by the output tensor
         self.Q_values = output
