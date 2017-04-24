@@ -115,9 +115,9 @@ if __name__ == '__main__':
     target_agent.learning = False
 
 
-    test_agent1 = Player('random_player')
-    test_agent2 = SimplePlayer('moderate_player', level=1)
-    test_agent3 = SimplePlayer('advanced_player', level=2)
+    test_agent1 = Player(name='random_player')
+    test_agent2 = SimplePlayer(name='moderate_player', level=1)
+    test_agent3 = SimplePlayer(name='advanced_player', level=2)
     
     env = DotsAndBoxes(game_size)
     n_games = 100000
@@ -126,7 +126,7 @@ if __name__ == '__main__':
     
     logs, tests = self_play_simulation(env, train_agent, target_agent,
                                        n_games, update_step,
-                                       [test_agent1,test_agent2], test_games)
+                                       [test_agent1,test_agent2,test_agent3], test_games)
                 
         
             

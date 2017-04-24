@@ -70,8 +70,8 @@ class SimplePlayer(Player):
     
     When the SimplePlayer detects that it can score a point through one of its actions, it will do so.
     It will also try to avoid putting the third wall on a box."""
-    def __init__(self, level=1):
-        super().__init__()
+    def __init__(self, name, level=1):
+        super().__init__(name=name)
         self.level = level
     
     def choose_action(self):
