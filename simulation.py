@@ -4,7 +4,7 @@ Created on Mon Apr 10 16:13:24 2017
 
 @author: deakma
 """
-from ai_agents import TDLearner
+from ai_agents import DQNLearner
 from naive_players import Player, SimplePlayer
 from dots_and_boxes import DotsAndBoxes
 from copy import deepcopy
@@ -109,9 +109,9 @@ def self_play_simulation(environment,train_agent,target_agent,n_games,update_ste
     
 if __name__ == '__main__':
     game_size = 4
-    train_agent = TDLearner('train',alpha=1e-6,gamma=0.6)
+    train_agent = DQNLearner('train',alpha=1e-6,gamma=0.6)
 
-    target_agent = TDLearner('target')
+    target_agent = DQNLearner('target')
     target_agent.learning = False
 
 
@@ -119,9 +119,9 @@ if __name__ == '__main__':
     test_agent2 = SimplePlayer('test_2')
     
     env = DotsAndBoxes(game_size)
-    n_games = 500000
-    update_step = 1000
-    test_games = 100
+    n_games = 1000
+    update_step = 100
+    test_games = 10
     
     logs, tests = self_play_simulation(env, train_agent, target_agent,
                                        n_games, update_step,

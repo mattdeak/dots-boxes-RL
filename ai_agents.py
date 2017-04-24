@@ -9,17 +9,15 @@ import numpy as np
 from numpy import random
 import tensorflow as tf
 from dots_and_boxes import DotsAndBoxes
+from DQN import DQN_CMM
 
-class TDLearner(Player):
+class DQNLearner(Player):
     """DQN"""    
-    def __init__(self, name, alpha=1e-4, epsilon=0.1, gamma=0.95,lmbda=1, d_size=20000, update_size=100):
+    def __init__(self, name, alpha=1e-4, epsilon=0.05, gamma=0.6):
         """Initializes the SARSA agent.
         Attributes:
-            weights: weights used by the linear function approximator. One weight matrix per action.
             epsilon: epsilon value for an epsilon greedy improvement policy (0-1)
             alpha: learning rate [0-1]
-            lmbda: lambda for SARSA(lambda) improvement policy - determines strength of eligibility trace [0-1]
-            eligibility: eligibility table. One per action.
             gamma: Decay rate of reward
             action: Next action to be taken in the environment
         """
@@ -30,29 +28,11 @@ class TDLearner(Player):
         # Hyper-parameter initialization
         self.epsilon = epsilon
         self.alpha = alpha
-        self.lmbda = lmbda
         self.gamma = gamma
 
-        # Deep replay table
-        self.transition_count = 0
-        self.replay_table = None
-        self.replay_size = d_size
-        self.update_size = update_size
-        self.last_state = None
-
         # Variables needed for Q function interaction
-        self.sess = None
-        self.Q_values = None
-        self.input_matrix = None
-        self.loss = None
-        self.saver = None
-        self.target_Q = None
-        self.optimizer = None
-        self.update_model = None
-        self.output_gradient = None
-        self.convolutional_gradient = None
-        self.keep_prob = None
-        
+        self.DQN = None
+
         # For TD-Update
         self.last_state = None
         self.last_action = None
@@ -70,8 +50,12 @@ class TDLearner(Player):
         If there is no Q-model, builds one based on the
         environments action space"""
         self._environment = environment
-        if self.sess is None:
-            self._build_model()
+
+        # Initialize the DQN if one does not already exist
+        if self.DQN is None:
+            input_shape = environment.state.shape
+            outputs = len(environment.action_list)
+            self.DQN = DQN_CMM(input_shape, outputs, alpha=self.alpha, gamma=self.gamma)
 
     def act(self):
         """Chooses an action according to the DQN and performs a TD update if possible
@@ -91,8 +75,11 @@ class TDLearner(Player):
         return action
         
     def observe(self, state, reward):
-        """Observes the action that the opponent took"""
-        
+        """
+        Observe a state-reward pair
+        :param state: Current state of the game (nxnxd numpy array)
+        :param reward: Reward associated with state (integer)
+        """
         if self.learning:
             have_next_turn = int(self._environment.current_player == self)
     
@@ -101,7 +88,7 @@ class TDLearner(Player):
             else:
                 next_feature_vector = None
             
-            self.td_update(self.last_state, self.last_action, next_feature_vector, reward, have_next_turn)
+            self.update(self.last_state, self.last_action, next_feature_vector, reward, have_next_turn)
 
 
     def generate_input_vector(self, state):
@@ -110,187 +97,47 @@ class TDLearner(Player):
         input_vector = np.resize(state, [1, r, c, d])
         
         return input_vector
-
             
     def choose_action(self, feature_vector):
-        """Chooses an action based on an epsilon-greedy policy"""
+        """
+        :param feature_vector: The current state of the environment (nxnxd numpy array)
+        :return: action to take (int)
+        """
         if random.random() < self.epsilon and self.learning:
             chosen_action = np.random.choice(self._environment.valid_actions)
         else:
-            q_values = self.get_Q_values(feature_vector)[0]
-            #print ("Q: {}".format(q_values))
+            q_values = self.DQN.predict(feature_vector)[0]
             max_valid_q = q_values[self._environment.valid_actions].max()
             best_actions = np.where(q_values == max_valid_q)[0]
             chosen_action = random.choice([action for action in best_actions if action in self._environment.valid_actions])
         return chosen_action
-
-    def get_Q_values(self, feature_vector):
-        """Returns the Q_values of a state"""
-        q_values = self.sess.run(self.Q_values, feed_dict={self.input_matrix: feature_vector})
-        return q_values
        
-    def td_update(self, current_state, last_action, next_state, reward, have_next_turn):
-        """Updates the Q_function according to the TD update algorithm"""
-        #print("Previous: {}\nAction: {}\nNext: {}\nNext:{}".format(current_state,last_action,next_state,have_next_turn))
-        
+    def update(self, current_state, last_action, next_state, reward, have_next_turn):
+        """
+        :param current_state: The current state of the environment (nxnxd binary numpy array)
+        :param last_action: The last action taken (int)
+        :param next_state: The future state of the environment (nxnxd binary numpy array)
+        :param reward: The reward associated with next_state (float)
+        :param have_next_turn: Whether or not the agent has control on the next state (int)
+        """
         # Update the replay table
-        self.replay_table[self.transition_count % self.replay_size] = (current_state, last_action, next_state, reward, have_next_turn)
-        self.transition_count = (self.transition_count + 1)
+        self.DQN.record_state((current_state, last_action, next_state, reward, have_next_turn))
 
-        # Don't start learning until transition table has some data
-        if self.transition_count >= self.update_size * 20:
-            if self.transition_count == self.update_size * 20:
-                print (self.name)
-                print("Replay Table is Ready\n")
-            
-            # Get a random subsection of the replay table for mini-batch update
-            random_tbl = random.choice(self.replay_table[:min(self.transition_count,self.replay_size)],size=self.update_size)
-            feature_vectors = np.vstack(random_tbl['state'])
-            actions = random_tbl['action']
-            next_feature_vectors = np.vstack(random_tbl['next_state'])
-            rewards = random_tbl['reward']
-            next_turn_vector = random_tbl['had_next_turn']
-            
-            # Get the indices of the non-terminal states
-            non_terminal_ix = np.where([~np.any(np.isnan(next_feature_vectors),axis=(1,2,3))])[1]
-            next_turn_vector[next_turn_vector == 0] = -1
-                                       
-            q_current = self.get_Q_values(feature_vectors)
-            # Default q_next will be all zeros (this encompasses terminal states)
-            q_next = np.zeros([self.update_size,len(self._environment.action_list)])
-            q_next[non_terminal_ix] = self.get_Q_values(next_feature_vectors[non_terminal_ix])
-            
-            # The target should be equal to q_current in every place
-            target = q_current.copy()
-            
-            # Only actions that have been taken should be updated with the reward
-            # This means that the target - q_current will be [0 0 0 0 0 0 x 0 0....] 
-            # so the gradient update will only be applied to the action taken
-            # for a given feature vector.
-            # The next turn vector controls for a conditional minimax. If the opponents turn is next,
-            # The value of the next state is actually the negative maximum across all actions. If our turn is next,
-            # The value is the maximum. 
-            target[np.arange(len(target)), actions] += (rewards + self.gamma*next_turn_vector*q_next.max(axis=1))
-            
-            # Logging
-            if self.log_file is not None:
-                print ("Current Q Value: {}".format(q_current),file=self.log_file)
-                print ("Next Q Value: {}".format(q_next),file=self.log_file)
-                print ("Current Rewards: {}".format(rewards),file=self.log_file)
-                print ("Actions: {}".format(actions),file=self.log_file)
-                print ("Targets: {}".format(target),file=self.log_file)
-                
-                # Log some of the gradients to check for gradient explosion
-                loss, output_grad, conv_grad = self.sess.run([self.loss,self.output_gradient,self.convolutional_gradient],
-                                                             feed_dict={self.target_Q: target, self.input_matrix: feature_vectors})
-                print ("Loss: {}".format(loss),file=self.log_file)
-                print ("Output Weight Gradient: {}".format(output_grad),file=self.log_file)
-                print ("Convolutional Gradient: {}".format(conv_grad),file=self.log_file)
-            
-            # Update the model
-            self.sess.run(self.update_model, feed_dict={self.target_Q: target, self.input_matrix: feature_vectors})
+        # Train the DQN
+        self.DQN.train()
+
 
     def save_model(self,checkpoint_name=None):
         """Saves a model and returns the name of the checkpoint"""
-        self.saver.save(self.sess, checkpoint_name)
+        self.DQN.save_model(checkpoint_name)
 
     def load_model(self,model_dir):
         """Restores a model from checkpoint"""
-        self.saver.restore(self.sess, tf.train.latest_checkpoint(model_dir))
-
-    def get_variable(self,var_name):
-        """Returns one of the neural net variables"""
-        variable = self.sess.run(var_name)
-        return variable
-
-    def list_variables(self):
-        """Lists present variables in the neural net"""
-        return [v.name for v in tf.trainable_variables()]
-        
-    def _build_model(self):
-        """Builds the neural net used as the Q Function"""
-        # Sets up the replay table for the DQN
-        r,c,d = self._environment.state.shape
-        self.replay_table = np.rec.array(np.zeros(self.replay_size, 
-                                                  dtype=[('state','(1,{},{},{})float32'.format(r,c,d)),
-                                                              ('action', 'int8'),
-                                                              ('next_state', '(1,{},{},{})float32'.format(r,c,d)),
-                                                              ('reward','float32'),
-                                                              ('had_next_turn','int8')]))
-    
-        # Set up the graph
-        tf.reset_default_graph()
-        self.sess = tf.Session()
-        
-        # Set relevent parameters
-        output_size = len(self._environment.action_list)
-        conv1_shape = [3, 3, 4, 16]
-        conv2_shape = [1, 1, conv1_shape[-1], 32]
-        fc_size = 256
-
-        # Input placeholder
-        row, column, depth = self._environment.state.shape
-        self.input_matrix = tf.placeholder(tf.float32, [None, r, c, d],name='X')
-
-        # Set up weights and biases for convolutional layers
-        W1 = tf.Variable(tf.truncated_normal(conv1_shape, stddev=0.1),name='W1')
-        B1 = tf.Variable(tf.zeros(conv1_shape[-1]),name='B1')
-        W2 = tf.Variable(tf.truncated_normal(conv2_shape, stddev=0.1),name='W2')
-        B2 = tf.Variable(tf.zeros([conv2_shape[-1]]),name='B2')
-
-        # Helper function for convolutional layers
-        def conv2d(x,W,strides=[1, 1, 1, 1]):
-            return tf.nn.conv2d(x, W, strides=strides, padding='SAME')
-        
-        # Create convolutional layers
-        h1 = tf.nn.elu(tf.add(conv2d(self.input_matrix, W1, strides=[1, 1, 1, 1]), B1),name='Conv1')
-        h2 = tf.nn.elu(tf.add(conv2d(h1, W2), B2),name='Conv2')
-
-        # Create flattened layer
-        h2_shape = h2.get_shape().as_list()[1:]
-        flattened = tf.reshape(h2, [-1, np.prod(h2_shape)], name='Flattened')
-
-        # Create FC and output variables
-        W3 = tf.Variable(tf.truncated_normal([flattened.get_shape().as_list()[1], fc_size], stddev=0.1),name='W3')
-        B3 = tf.Variable(tf.zeros([fc_size]),name='B3')
-        W4 = tf.Variable(tf.truncated_normal([fc_size, fc_size], stddev=0.1), name='W4')
-        B4 = tf.Variable(tf.zeros([fc_size]), name='B4')
-        outputW = tf.Variable(tf.truncated_normal([fc_size, output_size], stddev=0.1),name='outputW')
-        outputB = tf.Variable(tf.zeros([output_size]),name='outputB')
-
-        # Create FC and output layer
-        h3 = tf.nn.elu(tf.add(tf.matmul(flattened, W3), B3),name='FC')
-        h4 = tf.nn.elu(tf.add(tf.matmul(h3,W4), B4), name='FC2')
-        output = tf.tanh(tf.add(tf.matmul(h4, outputW), outputB), name='output')
-        
-        # Q values are represented by the output tensor
-        self.Q_values = output
-
-        # Create update structure
-        self.target_Q = tf.placeholder(tf.float32,[None,output_size],'Target')
-        self.loss = tf.reduce_mean(tf.square(self.target_Q - self.Q_values))
-        self.optimizer = tf.train.RMSPropOptimizer(self.alpha)
-        
-         # Clip gradients to prevent gradient explosion
-        gradients = self.optimizer.compute_gradients(self.loss)
-        clipped_gradients = [(tf.clip_by_value(grad,-1.,1.), var) for grad, var in gradients]
-        self.update_model = self.optimizer.apply_gradients(clipped_gradients)
-        
-        # Saves and loads models
-        self.saver = tf.train.Saver()
-        
-        # Specific gradients for logging purposes only
-        self.output_gradient = self.optimizer.compute_gradients(self.loss, [outputW])
-        self.convolutional_gradient = self.optimizer.compute_gradients(self.loss, [W1])
-        
-        # Initialize all variables
-        init = tf.global_variables_initializer()
-        self.sess.run(init)
-        
+        self.DQN.load_model(model_dir)
 
 if __name__ == '__main__':
-    s = TDLearner('train')
-    s2 = TDLearner('test')
+    s = DQNLearner('train')
+    s2 = DQNLearner('test')
     s2.learning = False
     
     env = DotsAndBoxes()
