@@ -70,6 +70,9 @@ class SimplePlayer(Player):
     
     When the SimplePlayer detects that it can score a point through one of its actions, it will do so.
     It will also try to avoid putting the third wall on a box."""
+    def __init__(self, level=1):
+        super().__init__()
+        self.level = level
     
     def choose_action(self):
         fourth_wall_actions = []
@@ -86,7 +89,7 @@ class SimplePlayer(Player):
         
         if len(fourth_wall_actions) != 0:
             action = random.choice(fourth_wall_actions)
-        elif len(safe_actions) != 0:
+        elif len(safe_actions) != 0 and self.level == 2:
             action = random.choice(safe_actions)
         else:
             action = random.choice(self._environment.valid_actions)

@@ -115,13 +115,14 @@ if __name__ == '__main__':
     target_agent.learning = False
 
 
-    test_agent1 = Player('test')
-    test_agent2 = SimplePlayer('test_2')
+    test_agent1 = Player('random_player')
+    test_agent2 = SimplePlayer('moderate_player', level=1)
+    test_agent3 = SimplePlayer('advanced_player', level=2)
     
     env = DotsAndBoxes(game_size)
-    n_games = 1000
-    update_step = 100
-    test_games = 10
+    n_games = 100000
+    update_step = 1000
+    test_games = 100
     
     logs, tests = self_play_simulation(env, train_agent, target_agent,
                                        n_games, update_step,
