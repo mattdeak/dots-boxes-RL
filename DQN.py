@@ -82,6 +82,9 @@ class DQN_CMM:
             # The target should be equal to q_current in every place
             target = q_current.copy()
 
+            # Apply hyperbolix tangent non-linearity to reward
+            rewards = np.tanh(rewards)
+
             # Only actions that have been taken should be updated with the reward
             # This means that the target - q_current will be [0 0 0 0 0 0 x 0 0....]
             # so the gradient update will only be applied to the action taken
