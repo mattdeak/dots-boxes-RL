@@ -118,26 +118,45 @@ class DQN_CMM:
         self.sess = tf.Session()
 
         # Set relevent parameters
-        conv1_shape = [3, 3, 4, 16]
-        conv2_shape = [1, 1, conv1_shape[-1], 32]
+        layer1_channels = 16
+        layer2_channels = 32
         fc_size = 256
 
         # Input placeholder
         self.input_matrix = tf.placeholder(tf.float32, [None, r, c, d], name='X')
 
-        # Set up weights and biases for convolutional layers
-        W1 = tf.Variable(tf.truncated_normal(conv1_shape, stddev=0.1), name='W1')
-        B1 = tf.Variable(tf.zeros(conv1_shape[-1]), name='B1')
-        W2 = tf.Variable(tf.truncated_normal(conv2_shape, stddev=0.1), name='W2')
-        B2 = tf.Variable(tf.zeros([conv2_shape[-1]]), name='B2')
-
         # Helper function for convolutional layers
-        def conv2d(x, W, strides=[1, 1, 1, 1]):
-            return tf.nn.conv2d(x, W, strides=strides, padding='SAME')
+        def conv2d(x, W, name, strides=[1, 1, 1, 1]):
+            output_channels = W.get_shape().as_list()[-1]
+            B = tf.Variable(tf.zeros([output_channels]), name=name + 'B')
+            return tf.nn.elu(tf.add(tf.nn.conv2d(x, W, strides=strides, padding='SAME'),B),name=name+'conv')
+
+        # Helper function for inception modules
+        def inception(X,output_channels,name):
+            input_shape = X.get_shape().as_list()
+
+            # Shapes
+            one_by_one_shape = [1, 1, input_shape[-1], output_channels]
+            three_by_three_shape = [3, 3, input_shape[-1], output_channels]
+            five_by_five_shape = [5, 5, input_shape[-1], output_channels]
+
+            # Weights
+            one_by_one_W = tf.Variable(tf.truncated_normal(one_by_one_shape, stddev=0.1), name=name + "W1x1")
+            three_by_three_W = tf.Variable(tf.truncated_normal(three_by_three_shape, stddev=0.1), name=name + 'W3x3')
+            five_by_five_W = tf.Variable(tf.truncated_normal(five_by_five_shape, stddev=0.1), name=name + 'W5x5')
+
+            # Convolutions
+            one_by_one_conv = conv2d(X, one_by_one_W, name)
+            three_by_three_conv = conv2d(X, three_by_three_W, name)
+            five_by_five_conv = conv2d(X, five_by_five_W, name)
+
+            inception_module = tf.nn.elu(tf.concat([one_by_one_conv,three_by_three_conv,five_by_five_conv],3),name=name+'inception')
+
+            return inception_module
 
         # Create convolutional layers
-        h1 = tf.nn.elu(tf.add(conv2d(self.input_matrix, W1, strides=[1, 1, 1, 1]), B1), name='Conv1')
-        h2 = tf.nn.elu(tf.add(conv2d(h1, W2), B2), name='Conv2')
+        h1 = inception(self.input_matrix, layer1_channels, name='layer1')
+        h2 = inception(h1, layer2_channels, name='layer2')
 
         # Create flattened layer
         h2_shape = h2.get_shape().as_list()[1:]
@@ -174,7 +193,6 @@ class DQN_CMM:
 
         # Specific gradients for logging purposes only
         self.output_gradient = self.optimizer.compute_gradients(self.loss, [outputW])
-        self.convolutional_gradient = self.optimizer.compute_gradients(self.loss, [W1])
 
         # Initialize all variables
         init = tf.global_variables_initializer()

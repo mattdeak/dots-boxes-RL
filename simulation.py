@@ -121,8 +121,8 @@ if __name__ == '__main__':
     
     env = DotsAndBoxes(game_size)
     n_games = 100000
-    update_step = 1000
-    test_games = 100
+    update_step = 5000
+    test_games = 500
     
     logs, tests = self_play_simulation(env, train_agent, target_agent,
                                        n_games, update_step,
