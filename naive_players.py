@@ -43,7 +43,8 @@ class Player:
         return action
         
     def observe(self,last_state,reward):
-        """Random player does nothing"""
+        """Observe the environment and do nothing"""
+        pass
         
     def choose_action(self):
         """Choose an action randomly in the environment."""

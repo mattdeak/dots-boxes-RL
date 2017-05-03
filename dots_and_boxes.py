@@ -69,9 +69,7 @@ class DotsAndBoxes():
         else:
             self.current_player = self._player1
             self.other_player = self._player2
-            
 
-            
     def end_game(self):
         """Returns final rewards"""
         if self.score[self.current_player] > self.score[self.other_player]:
@@ -166,8 +164,8 @@ class DotsAndBoxes():
                 game_log.append("{} built wall {}".format(acting_player, action))
                 game_log.append("Current Player 1 Score: {}".format(self.score[self._player1]))
                 game_log.append("Current Player 2 Score: {}".format(self.score[self._player2]))
-
                 game_length += 1
+
             else:
                 self.current_player.act()
                 
@@ -205,7 +203,7 @@ class DotsAndBoxes():
         
     def convert_to_wall(self,state):
         """Converts a specific game state array to the wall it represents"""
-        row,column,side = state
+        row, column, side = state
         if side == self.SIDES['N']:
             return row * self.size + column
         elif side == self.SIDES['S']:
@@ -260,7 +258,7 @@ class DotsAndBoxes():
             
             for column in range(self.size):
                 string += ("{:<1}".format("."))
-                n,s,e,w = self.state[row,column]
+                n, s, e, w = self.state[row,column]
                 n_string = ""                
                 if n == 1:
                     n_string = "----"
@@ -353,16 +351,8 @@ class DotsAndBoxes():
                     
                 
 if __name__ == '__main__':
-    db = DotsAndBoxes(3)
+    db = DotsAndBoxes(4)
     print(db)
-    print('----------------------')
-    db.build_wall(2)
-    db.build_wall(14)
-    db.build_wall(15)
-    db.build_wall(6)
-    db.build_wall(20)
-    db.build_wall(9)
-    print(db)
-        
+
         
         

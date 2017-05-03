@@ -7,7 +7,6 @@ Created on Sun Apr  9 18:06:56 2017
 from naive_players import Player
 import numpy as np
 from numpy import random
-import tensorflow as tf
 from dots_and_boxes import DotsAndBoxes
 from DQN import DQN_CMM
 
@@ -51,16 +50,11 @@ class DQNLearner(Player):
         environments action space"""
         self._environment = environment
 
-        # Initialize the DQN if one does not already exist
-        if self.DQN is None:
-            input_shape = environment.state.shape
-            outputs = len(environment.action_list)
-            self.DQN = DQN_CMM(input_shape, outputs, alpha=self.alpha, gamma=self.gamma)
-
     def act(self):
         """Chooses an action according to the DQN and performs a TD update if possible
         """
         state = self._environment.state
+        assert state is not None, 'Invalid State Passed for Agent Name: {}'.format(self.name)
         # Generate a feature vector
         feature_vector = self.generate_input_vector(state)
         
@@ -125,6 +119,12 @@ class DQNLearner(Player):
 
         # Train the DQN
         self.DQN.train()
+
+    def initialize_network(self):
+        assert self._environment is not None, 'Cannot initialize a network without environments'
+        input_shape = self._environment.state.shape
+        outputs = len(self._environment.action_list)
+        self.DQN = DQN_CMM(input_shape, outputs, alpha=self.alpha, gamma=self.gamma)
 
 
     def save_model(self,checkpoint_name=None):
