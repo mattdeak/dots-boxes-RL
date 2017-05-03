@@ -22,6 +22,9 @@ def self_play_simulation(environment,train_agent,target_agent,n_games,update_ste
     model_dir = model_path(env.size)
     log_file = log_path(env.size)
 
+    print ("Model Directory is: {}".format(model_dir))
+    print ("Log file is: {}".format(log_file))
+
     if not os.path.exists(log_file) or os.stat(log_file) == 0:
         with open(log_file,'a') as file:
             game_start = 1
@@ -37,8 +40,9 @@ def self_play_simulation(environment,train_agent,target_agent,n_games,update_ste
         train_agent.load_model(model_dir)
         target_agent.load_model(model_dir)
         print("Load Succeeded")
-    except:
+    except Exception as E:
         print("Attempted load and failed")
+        print("Exception Raised: {}".format(E))
 
     print ("Starting at game {}".format(game_start))
 
