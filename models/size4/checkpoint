@@ -1,2 +1,2 @@
-model_checkpoint_path: "/home/matthew/Programming/Projects/Dots_and_Boxes/models/size4/"
-all_model_checkpoint_paths: "/home/matthew/Programming/Projects/Dots_and_Boxes/models/size4/"
+model_checkpoint_path: "."
+all_model_checkpoint_paths: "."

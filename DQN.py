@@ -101,7 +101,7 @@ class DQN_CMM:
         self.saver.save(self.sess, checkpoint_name)
 
     def load_model(self, model_dir):
-        self.saver.restore(self.sess, tf.train.latest_checkpoint(model_dir))
+        self.saver.restore(self.sess, model_dir)
 
     def _build_network(self):
         """Builds the DQN Architecture t used as the Q Function"""

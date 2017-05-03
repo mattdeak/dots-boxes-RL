@@ -54,8 +54,6 @@ def switch_test():
     print (e.player1)
     print (e.other_player)
     print (e.player2)
-
-
     switch_players(e)
 
     print (e.current_player)
@@ -70,10 +68,10 @@ def recent_game(log_file):
     return number
 
 def model_path(size):
-    return '{0:s}{1:s}models{1:s}size{2:d}{1:s}'.format(os.getcwd(),os.sep,size)
+    return './models{0:s}size{1:d}{0:s}'.format(os.sep, size)
 
 def log_path(size):
-    return '{0:s}{1:s}models{1:s}size{2:d}{1:s}logs.txt'.format(os.getcwd(),os.sep,size)
+    return './models{0:s}size{1:d}{0:s}logs.txt'.format(os.sep, size)
 
 if __name__ == '__main__':
-    print(log_path(3))
+    print(model_path(3))

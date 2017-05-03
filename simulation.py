@@ -19,8 +19,8 @@ def self_play_simulation(environment,train_agent,target_agent,n_games,update_ste
     environment.player1 = train_agent
     environment.player2 = target_agent
 
-    model_dir = model_path(env.size)
-    log_file = log_path(env.size)
+    model_dir = model_path(environment.size)
+    log_file = log_path(environment.size)
 
     print ("Model Directory is: {}".format(model_dir))
     print ("Log file is: {}".format(log_file))
