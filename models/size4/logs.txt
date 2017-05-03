@@ -319,3 +319,12 @@
 107000,random_player,0.952,0.028,0.02
 107000,moderate_player,0.008,0.026,0.966
 107000,advanced_player,0.0,0.0,1.0
+108000,random_player,0.956,0.03,0.014
+108000,moderate_player,0.011,0.028,0.961
+108000,advanced_player,0.0,0.003,0.997
+109000,random_player,0.963,0.024,0.013
+109000,moderate_player,0.007,0.02,0.973
+109000,advanced_player,0.0,0.0,1.0
+110000,random_player,0.953,0.034,0.013
+110000,moderate_player,0.012,0.034,0.954
+110000,advanced_player,0.0,0.001,0.999
