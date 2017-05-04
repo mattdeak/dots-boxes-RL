@@ -1,0 +1,25 @@
+Game Number,Test Agent,Win Percentage,Draw Percentage,Loss Percentage
+1000,random_player,0.407,0.071,0.522
+1000,moderate_player,0.0,0.0,1.0
+1000,advanced_player,0.0,0.0,1.0
+2000,random_player,0.541,0.071,0.388
+2000,moderate_player,0.0,0.0,1.0
+2000,advanced_player,0.0,0.0,1.0
+3000,random_player,0.582,0.074,0.344
+3000,moderate_player,0.0,0.0,1.0
+3000,advanced_player,0.0,0.0,1.0
+4000,random_player,0.57,0.097,0.333
+4000,moderate_player,0.0,0.0,1.0
+4000,advanced_player,0.0,0.0,1.0
+5000,random_player,0.581,0.101,0.318
+5000,moderate_player,0.0,0.0,1.0
+5000,advanced_player,0.0,0.0,1.0
+6000,random_player,0.65,0.096,0.254
+6000,moderate_player,0.0,0.0,1.0
+6000,advanced_player,0.0,0.0,1.0
+7000,random_player,0.624,0.102,0.274
+7000,moderate_player,0.0,0.0,1.0
+7000,advanced_player,0.0,0.0,1.0
+8000,random_player,0.662,0.096,0.242
+8000,moderate_player,0.0,0.0,1.0
+8000,advanced_player,0.0,0.0,1.0
