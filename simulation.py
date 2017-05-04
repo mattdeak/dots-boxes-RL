@@ -72,11 +72,19 @@ def self_play_simulation(environment,train_agent,target_agent,n_games,update_ste
 
             # Give the target agent the most recent model
             print("Saving current model")
-            train_agent.save_model(model_dir)
+            path = train_agent.save_model(model_dir)
 
             # Load model into target
-            print ("Loading model into target")
-            target_agent.load_model(model_dir)
+            print ("Loading model into target.")
+            target_agent.load_model(path)
+
+            print ()
+
+        # Store permanently every 5% of training completion
+        if game_number % (n_games / 20) == 0:
+
+            print ("Storing model in Previous Directory")
+            train_agent.save_model(model_dir + os.sep + 'previous' + os.sep, global_step=game_number)
 
     
 if __name__ == '__main__':

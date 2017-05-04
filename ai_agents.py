@@ -129,7 +129,8 @@ class DQNLearner(Player):
 
     def save_model(self,checkpoint_name=None):
         """Saves a model and returns the name of the checkpoint"""
-        self.DQN.save_model(checkpoint_name)
+        path = self.DQN.save_model(checkpoint_name)
+        return path
 
     def load_model(self,model_dir):
         """Restores a model from checkpoint"""
