@@ -97,8 +97,8 @@ class DQN_CMM:
             #Update the model
             self.sess.run(self.update_model,feed_dict={self.input_matrix:feature_vectors,self.target_Q:target})
 
-    def save_model(self,checkpoint_name=None):
-        path = self.saver.save(self.sess, checkpoint_name)
+    def save_model(self, checkpoint_name, global_step=None):
+        path = self.saver.save(self.sess, checkpoint_name, global_step=global_step)
         return path
 
     def load_model(self, model_dir):

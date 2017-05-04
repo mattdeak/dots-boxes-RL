@@ -127,12 +127,12 @@ class DQNLearner(Player):
         self.DQN = DQN_CMM(input_shape, outputs, alpha=self.alpha, gamma=self.gamma)
 
 
-    def save_model(self,checkpoint_name=None):
+    def save_model(self, checkpoint_name, global_step=None):
         """Saves a model and returns the name of the checkpoint"""
-        path = self.DQN.save_model(checkpoint_name)
+        path = self.DQN.save_model(checkpoint_name, global_step=global_step)
         return path
 
-    def load_model(self,model_dir):
+    def load_model(self, model_dir):
         """Restores a model from checkpoint"""
         self.DQN.load_model(model_dir)
 

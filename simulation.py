@@ -30,7 +30,11 @@ def self_play_simulation(environment,train_agent,target_agent,n_games,update_ste
             game_start = 1
             file.write('Game Number,Test Agent,Win Percentage,Draw Percentage,Loss Percentage\n')
     else:
-        game_start = int(recent_game(log_file)) + 1
+        last_line = recent_game(log_file)
+        if last_line != "Game Number":
+            game_start = int(recent_game(log_file)) + 1
+        else:
+            game_start = 1
 
     train_agent.initialize_network()
     target_agent.initialize_network()
@@ -40,9 +44,8 @@ def self_play_simulation(environment,train_agent,target_agent,n_games,update_ste
         train_agent.load_model(model_dir)
         target_agent.load_model(model_dir)
         print("Load Succeeded")
-    except Exception as E:
+    except:
         print("Attempted load and failed")
-        print("Exception Raised: {}".format(E))
 
     print ("Starting at game {}".format(game_start))
 
@@ -72,7 +75,7 @@ def self_play_simulation(environment,train_agent,target_agent,n_games,update_ste
 
             # Give the target agent the most recent model
             print("Saving current model")
-            path = train_agent.save_model(model_dir)
+            path = train_agent.save_model(model_dir, global_step=game_number)
 
             # Load model into target
             print ("Loading model into target.")
@@ -89,7 +92,7 @@ def self_play_simulation(environment,train_agent,target_agent,n_games,update_ste
     
 if __name__ == '__main__':
     game_size = 4
-    train_agent = DQNLearner('train',alpha=5e-6,gamma=0.6)
+    train_agent = DQNLearner('train',alpha=1e-6,gamma=0.6)
 
     target_agent = DQNLearner('target')
     target_agent.learning = False
