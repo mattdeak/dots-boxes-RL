@@ -132,26 +132,24 @@ class DQN_CMM:
             B = tf.Variable(tf.zeros([output_channels]), name=name + 'B')
             return tf.nn.elu(tf.add(tf.nn.conv2d(x, W, strides=strides, padding='SAME'),B),name=name+'conv')
 
-        # Helper function for inception modules
+        # Helper function for mini-inception modules
         def inception(X,output_channels,name):
             input_shape = X.get_shape().as_list()
 
             # Shapes
             one_by_one_shape = [1, 1, input_shape[-1], output_channels]
             three_by_three_shape = [3, 3, input_shape[-1], output_channels]
-            five_by_five_shape = [5, 5, input_shape[-1], output_channels]
 
             # Weights
             one_by_one_W = tf.Variable(tf.truncated_normal(one_by_one_shape, stddev=0.1), name=name + "W1x1")
             three_by_three_W = tf.Variable(tf.truncated_normal(three_by_three_shape, stddev=0.1), name=name + 'W3x3')
-            five_by_five_W = tf.Variable(tf.truncated_normal(five_by_five_shape, stddev=0.1), name=name + 'W5x5')
 
             # Convolutions
             one_by_one_conv = conv2d(X, one_by_one_W, name)
             three_by_three_conv = conv2d(X, three_by_three_W, name)
-            five_by_five_conv = conv2d(X, five_by_five_W, name)
 
-            inception_module = tf.nn.elu(tf.concat([one_by_one_conv,three_by_three_conv,five_by_five_conv],3),name=name+'inception')
+            # Inception
+            inception_module = tf.nn.elu(tf.concat([one_by_one_conv, three_by_three_conv],3), name=name+'inception')
 
             return inception_module
 

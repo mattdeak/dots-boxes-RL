@@ -41,8 +41,8 @@ def self_play_simulation(environment,train_agent,target_agent,n_games,update_ste
 
     # Load previous model if it exists
     try:
-        train_agent.load_model(model_dir)
-        target_agent.load_model(model_dir)
+        train_agent.load_model(model_dir + '-750000')
+        target_agent.load_model(model_dir + '-750000')
         print("Load Succeeded")
     except:
         print("Attempted load and failed")
@@ -78,9 +78,8 @@ def self_play_simulation(environment,train_agent,target_agent,n_games,update_ste
             path = train_agent.save_model(model_dir, global_step=game_number)
 
             # Load model into target
-            print ("Loading model into target.")
+            print ("Loading model into target")
             target_agent.load_model(path)
-
             print ()
 
         # Store permanently every 5% of training completion
@@ -104,7 +103,7 @@ if __name__ == '__main__':
     
     env = DotsAndBoxes(game_size)
     n_games = 1000000
-    update_step = 1000
+    update_step = 25000
     test_games = 1000
     
     self_play_simulation(env, train_agent, target_agent,
