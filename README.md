@@ -30,7 +30,7 @@ To train a model, simply run the command
 `python3 simulation.py`
 
 Currently, this file is hard-coded to halt at one million iterations. Since the current model has already been trained on one-million
-iterations, you must either delete the previous model (located in the models/size4 subdirectory) or manual change the iteration limit
+iterations, you must either delete the previous model AND log file (located in the models/size4 subdirectory) or manual change the iteration limit
 in the simulation.py main program if you wish to run a training simulation. This parameter is denoted by `n_games`.
 
 
