@@ -21,9 +21,9 @@ You can also elect to be player 2 by using the optional parameter `player-choice
 
 In-game, build walls at selected locations according to the key map shown below:
 
-PIC HERE
+![Key Map](https://github.com/mattdeak/dots-boxes-RL/blob/master/images/output_map.jpg "Key Map")
 
-## Training a Model
+#### Training a Model
 
 To train a model, simply run the command
 
