@@ -1,30 +1,46 @@
 # -*- coding: utf-8 -*-
 """
-Created on Mon Apr 10 16:13:24 2017
+A module containing simulation functions to train an ai agent
 
-@author: deakma
+@author: Matthew Deakos
 """
 from ai_agents import DQNLearner
-from naive_players import Player, SimplePlayer
-from dots_and_boxes import DotsAndBoxes
+from naive_players import SimplePlayer
 from simulation_utils import *
 import os
 
-def self_play_simulation(environment,train_agent,target_agent,n_games,update_step,test_agents=None,test_games=None):
-    """A training environment for an agent"""
 
+def train_simulation(environment, train_agent, target_agent, n_games, update_step, test_agents=None, test_games=None):
+    """
+    Runs a simulation to train an agent. If test agents are provided, tests the agent at an interval
+    of 1000 iterations and logs the results.
+    :param environment: game environment
+    :param train_agent: learning agent
+    :param target_agent: opponent agent
+    :param n_games: number of training games to run
+    :param update_step: number of games played until opponent model is updated
+    :param test_agents: array of test agents
+    :param test_games: number of games to play against test agents
+    :return:
+    """
+
+    # Create a test environment
     if test_agents is not None:
         test_env = clone(environment)
 
+    # Set the players to the environment
     environment.player1 = train_agent
     environment.player2 = target_agent
 
+    # Get the directory to save/load models and log information
     model_dir = model_path(environment.size)
     log_file = log_path(environment.size)
 
+    # For Debugging
     print ("Model Directory is: {}".format(model_dir))
     print ("Log file is: {}".format(log_file))
 
+    # Start log file if it doesn't exist, otherwise load from last game
     if not os.path.exists(log_file) or os.stat(log_file) == 0:
         with open(log_file,'a') as file:
             game_start = 1
@@ -41,20 +57,21 @@ def self_play_simulation(environment,train_agent,target_agent,n_games,update_ste
 
     # Load previous model if it exists
     try:
-        train_agent.load_model(model_dir + '-750000')
-        target_agent.load_model(model_dir + '-750000')
+        train_agent.load_model(model_dir + '-' + str(game_start - 1))
+        target_agent.load_model(model_dir + '-' + str(game_start - 1))
         print("Load Succeeded")
     except:
         print("Attempted load and failed")
 
+    # Debugging
     print ("Starting at game {}".format(game_start))
 
+    # Begin training games
     for game_number in range(game_start, n_games + 1):
 
         # Switch who goes first every other round
         environment.player1 = train_agent
         environment.player2 = target_agent
-
         if game_number % 2 == 0:
             switch_players(environment)
 
@@ -66,7 +83,7 @@ def self_play_simulation(environment,train_agent,target_agent,n_games,update_ste
             with open(log_file, 'a') as file:
                 for agent in test_agents:
                     win_percentage, draw_percentage, loss_percentage = test(test_env, train_agent, agent, test_games)
-                    file.write('{},{},{},{},{}\n'.format(game_number, agent, win_percentage,draw_percentage, loss_percentage))
+                    file.write('{},{},{},{},{}\n'.format(game_number, agent, win_percentage, draw_percentage, loss_percentage))
                     print()
 
         
@@ -82,13 +99,70 @@ def self_play_simulation(environment,train_agent,target_agent,n_games,update_ste
             target_agent.load_model(path)
             print ()
 
-        # Store permanently every 5% of training completion
-        if game_number % (n_games / 20) == 0:
+    print ("Finished!")
 
-            print ("Storing model in Previous Directory")
-            train_agent.save_model(model_dir + os.sep + 'previous' + os.sep, global_step=game_number)
 
-    
+def output_comparison(training_games=10000, test_games=500):
+    """
+    Runs a comparison against 2 agents that are identical aside from the output activation function.
+    :param training_games: Number of games to play
+    :param test_games: Number of test games to play
+    """
+    training_env = DotsAndBoxes(4)
+    training_env2 = clone(training_env)
+    test_env = clone(training_env)
+
+    tanh_player = DQNLearner('tanh output', alpha=1e-6, gamma=0.6)
+    linout_player = DQNLearner('linear output', alpha=1e-6, gamma=0.6)
+    training_opponent = Player('training opponent')
+    training_opponent2 = Player('training opponent 2')
+
+    training_env.player1 = tanh_player
+    training_env.player2 = training_opponent
+    tanh_player.initialize_network(output='tanh')
+
+    training_env2.player1 = linout_player
+    training_env2.player2 = training_opponent2
+    linout_player.initialize_network(output='linear')
+
+
+    test_random = Player('Random')
+    test_moderate = SimplePlayer('Moderate', level=1)
+    test_advanced = SimplePlayer('Advanced', level=2)
+
+    log_file = '.{0:s}Analysis{0:s}output_comparison.txt'.format(os.sep)
+    with open(log_file, 'w') as file:
+        file.write('Learning Agent,Test Agent,Win %, Draw %, Loss %\n')
+
+    for game_number in range(1, training_games+1):
+
+        # Switch who goes first every other round
+        training_env.player1 = tanh_player
+        training_env.player2 = training_opponent
+
+        training_env2.player1 = linout_player
+        training_env2.player2 = training_opponent2
+
+        # Switch starting positions
+        if game_number % 2 == 0:
+            switch_players(training_env)
+            switch_players(training_env2)
+
+        training_env.play()
+        training_env2.play()
+
+        if game_number % (training_games/20) == 0:
+            print("Running Tests at game {}".format(game_number))
+            for test_agent in (test_random, test_moderate, test_advanced):
+                for player in (tanh_player, linout_player):
+                    print("Testing player: {}".format(player))
+                    wins, draws, loss = test(test_env, player, test_agent, test_games)
+                    with open(log_file, 'a') as file:
+                        file.write('{},{},{},{},{}\n'.format(player, test_agent, wins, draws, loss))
+                    print()
+
+    print ("Training Completed!")
+
 if __name__ == '__main__':
     game_size = 4
     train_agent = DQNLearner('train',alpha=1e-6,gamma=0.6)
@@ -106,7 +180,7 @@ if __name__ == '__main__':
     update_step = 25000
     test_games = 1000
     
-    self_play_simulation(env, train_agent, target_agent,
+    train_simulation(env, train_agent, target_agent,
                                     n_games, update_step,
                                     [test_agent1,test_agent2,test_agent3], test_games)
                 

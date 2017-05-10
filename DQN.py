@@ -1,3 +1,6 @@
+"""
+This module contains the Q-Function and its interface API
+"""
 import numpy as np
 import tensorflow as tf
 
@@ -6,7 +9,7 @@ class DQN_CMM:
     A DQN which uses a conditional minimax while training.
     """
 
-    def __init__(self,input_shape,n_outputs,replay_tbl_size=20000,update_size=100,alpha=1e-4,gamma=0.6):
+    def __init__(self, input_shape, n_outputs, replay_tbl_size=20000, update_size=100, alpha=1e-4, gamma=0.6, output='tanh'):
         """
         Initializes DQN parameters
         :param input_shape: A tuple in form (height,width,depth) as the shape of the input
@@ -14,6 +17,8 @@ class DQN_CMM:
         :param replay_tbl_step: The number of steps at which to
         :param alpha: The learning rate (float)
         """
+        assert output in ['tanh','linear'], "Output can only be one of 'tanh' or 'linear'"
+
         self.input_shape = input_shape
         self.n_outputs = n_outputs
 
@@ -38,7 +43,7 @@ class DQN_CMM:
 
 
         # Build the network architecture
-        self._build_network()
+        self._build_network(output_activation=output)
 
     def record_state(self,state):
         """
@@ -104,7 +109,7 @@ class DQN_CMM:
     def load_model(self, model_dir):
         self.saver.restore(self.sess, model_dir)
 
-    def _build_network(self):
+    def _build_network(self, output_activation='tanh'):
         """Builds the DQN Architecture t used as the Q Function"""
         # Sets up the replay table for the DQN
         r, c, d = self.input_shape
@@ -172,7 +177,11 @@ class DQN_CMM:
         # Create FC and output layer
         h3 = tf.nn.elu(tf.add(tf.matmul(flattened, W3), B3), name='FC')
         h4 = tf.nn.elu(tf.add(tf.matmul(h3, W4), B4), name='FC2')
-        output = tf.tanh(tf.add(tf.matmul(h4, outputW), outputB), name='output')
+
+        if output_activation == 'tanh':
+            output = tf.tanh(tf.add(tf.matmul(h4, outputW), outputB), name='output')
+        else:
+            output = tf.add(tf.matmul(h4, outputW), outputB, name='output')
 
         # Q values are represented by the output tensor
         self.Q_values = output

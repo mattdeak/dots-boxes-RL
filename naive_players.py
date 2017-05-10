@@ -58,7 +58,6 @@ class ManualPlayer(Player):
         
     def choose_action(self):
         """Choose an action based on user input"""
-        print ("Current Game Board:\n{}".format(self._environment))
         action = None
         while action not in self._environment.valid_actions:
             print("valid action: {}".format(self._environment.valid_actions))

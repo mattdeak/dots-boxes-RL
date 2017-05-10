@@ -7,7 +7,7 @@ Created on Sun Apr  9 18:06:56 2017
 from naive_players import Player
 import numpy as np
 from numpy import random
-from dots_and_boxes import DotsAndBoxes
+from environment import DotsAndBoxes
 from DQN import DQN_CMM
 
 class DQNLearner(Player):
@@ -84,7 +84,6 @@ class DQNLearner(Player):
             
             self.update(self.last_state, self.last_action, next_feature_vector, reward, have_next_turn)
 
-
     def generate_input_vector(self, state):
         """Generates an input vector based on an environment state."""
         r, c, d = state.shape
@@ -97,13 +96,15 @@ class DQNLearner(Player):
         :param feature_vector: The current state of the environment (nxnxd numpy array)
         :return: action to take (int)
         """
+
+        # Follow Epsilon-Greedy
         if random.random() < self.epsilon and self.learning:
             chosen_action = np.random.choice(self._environment.valid_actions)
         else:
-            q_values = self.DQN.predict(feature_vector)[0]
-            max_valid_q = q_values[self._environment.valid_actions].max()
-            best_actions = np.where(q_values == max_valid_q)[0]
-            chosen_action = random.choice([action for action in best_actions if action in self._environment.valid_actions])
+            q_values = self.DQN.predict(feature_vector)[0] # Get all Q-Values for the current state
+            max_valid_q = q_values[self._environment.valid_actions].max() # Get the highest Q value that corresponds to a valid action
+            best_actions = np.where(q_values == max_valid_q)[0] # Select all actions that have this Q-Value
+            chosen_action = random.choice([action for action in best_actions if action in self._environment.valid_actions]) # Choose randomly among valid actions
         return chosen_action
        
     def update(self, current_state, last_action, next_state, reward, have_next_turn):
@@ -120,12 +121,11 @@ class DQNLearner(Player):
         # Train the DQN
         self.DQN.train()
 
-    def initialize_network(self):
-        assert self._environment is not None, 'Cannot initialize a network without environments'
+    def initialize_network(self, output='tanh'):
+        assert self._environment is not None, 'Cannot initialize a network without environment'
         input_shape = self._environment.state.shape
         outputs = len(self._environment.action_list)
-        self.DQN = DQN_CMM(input_shape, outputs, alpha=self.alpha, gamma=self.gamma)
-
+        self.DQN = DQN_CMM(input_shape, outputs, alpha=self.alpha, gamma=self.gamma, output=output)
 
     def save_model(self, checkpoint_name, global_step=None):
         """Saves a model and returns the name of the checkpoint"""

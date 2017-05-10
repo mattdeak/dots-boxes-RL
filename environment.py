@@ -8,17 +8,20 @@ Created on Sat Apr  8 21:52:43 2017
 import numpy as np
 from collections import defaultdict
 from numpy import random
-from time import sleep
+
 
 class DotsAndBoxes():
     """The main environment for a dots and boxes game"""
     
+    def __init__(self,size=4):
+        """
+        Initializes the environment
+        :param size: the size (in cells, not dots) of the environment
+        """
 
-    
-    def __init__(self,size=2):
-        """Initializer"""
         self.size = size
-        #State is dot-to-dot cells with 4 channels (up,down,left,right)
+
+        # State is dot-to-dot cells with 4 channels (up,down,left,right)
         self.state = np.zeros([size,size,4])
         self._player1 = None
         self._player2 = None
@@ -27,7 +30,6 @@ class DotsAndBoxes():
         self.score = defaultdict(int)
         self.action_list = range(size * (size + 1) * 2)
         self.valid_actions = None
-        self.manual = 0 #No manual player
         self.reward_dictionary = {'win':1,'loss':-1,'draw':0}
         self.captured_cells = defaultdict(list)
         self.exit_code = None
@@ -78,19 +80,16 @@ class DotsAndBoxes():
             return self.reward_dictionary['draw']
         else:
             return self.reward_dictionary['loss']
-        
-    
-    
+
     def step(self,action):
         """Takes an action and changes the game state."""
         #If an action is invalid and the environment is set to quit
         #on an invalid action, set the reward to loss and return
         #the terminal state. Otherwise, simply return the state without
         #switching turns, to give the player another chance.
-        if (not self.is_valid_action(action)) and self.current_player.learning:
-                raise ValueError("Should not be here anymore! Action: {}".format(action))
-                self.exit_code = 'loss'
-                self.end_game()
+        if not self.is_valid_action(action):
+                raise ValueError("Invalid Action: {}".format(action))
+
         else:
             # If the agent is not learning, just choose a random action
             if not self.is_valid_action(action):
@@ -120,11 +119,14 @@ class DotsAndBoxes():
                     self.switch_turn()
                 else:
                     self.current_player.observe(self.state, reward)
-                
-        
-    
+
     def score_action(self,action):
-        """Scores the action and returns whether"""
+        """
+        Updates the score based on the action last taken.
+
+        :param action: The integer representing the wall to be built
+        :return: True if action scored, false otherwise
+        """
         states = self.convert_to_state(action)
         scored = False
         for state_index in states:
@@ -134,28 +136,21 @@ class DotsAndBoxes():
                 self.score[self.current_player] += 1
                 scored = True
                 
-        return scored  
-        
-    def is_scoring_action(self,action):
-        """Determines if the action 'would' score if it was played"""
-        states = self.convert_to_state(action)
-        for state_index in states:
-            cell_row,cell_column,side = state_index[:2]
-            if np.sum(s for s in self.state[cell_row,cell_column] if s != side) == 3:
-                return True
-        return False
+        return scored
 
-    def play(self, log=False, pause=None):
-        """Plays a game"""
-        self._initialize_game()
+    def play(self, log=False):
+        """
+        Plays a game in the environment
+        :param log: indicates whether logging is one
+        :return: game metrics
+        """
+        self.initialize_game()
         game_log = []
         state_log = []
         game_length = 0
         winner = ""
         
         while self.state is not None:
-            if pause is not None:
-                sleep(pause)
             if log:
                 game_log.append("\nState:\n{}\n".format(self))
                 acting_player = str(self.current_player)
@@ -185,9 +180,9 @@ class DotsAndBoxes():
 
             game_log.append("Winner: {}".format(winner))
                 
-        return game_log, str(winner), game_length, state_log
+        return game_log, str(winner), game_length, state_log, self.score
 
-    def _initialize_game(self):
+    def initialize_game(self):
         self.valid_actions = [i for i in range(self.size * (self.size + 1) * 2)]
         self.score = defaultdict(int)
         self.exit_code = None
@@ -214,8 +209,7 @@ class DotsAndBoxes():
             return (self.size * (self.size + 1)) + row * self.size + (column + 1)
         else:
             raise ValueError("Can't convert state to wall. 3rd Dimension must be range [0-3]. Value given: {}".format(side))
-            
-    
+
     def convert_to_state(self,wall_number):
         """Converts a wall number to the specific game states that it represents"""        
         cells = []
@@ -295,7 +289,8 @@ class DotsAndBoxes():
             
         string += ".\n"
         
-        string += "\nPlayer 1 Score is {}\nPlayer 2 Score is {}\n".format(self.score[self._player1],self.score[self._player2])
+        string += "\n{} Score is {}\n{} Score is {}\n".format(self._player1, self.score[self._player1],
+                                                                          self._player2, self.score[self._player2])
                             
         return string
 
@@ -344,7 +339,7 @@ class DotsAndBoxes():
 
         string += ".\n"
 
-        string += "\nPlayer 1 Score is {}\nPlayer 2 Score is {}\n".format(self.score[self._player1],
+        string += "\n{} Score is {}\n{} Score is {}\n".format(self._player1, self._player2, self.score[self._player1],
                                                                           self.score[self._player2])
 
         return string
