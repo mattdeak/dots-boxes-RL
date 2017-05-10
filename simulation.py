@@ -125,7 +125,6 @@ def output_comparison(training_games=10000, test_games=500):
     training_env2.player2 = training_opponent2
     linout_player.initialize_network(output='linear')
 
-
     test_random = Player('Random')
     test_moderate = SimplePlayer('Moderate', level=1)
     test_advanced = SimplePlayer('Advanced', level=2)
